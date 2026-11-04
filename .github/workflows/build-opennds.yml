@@ -8,14 +8,60 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    name: ${{ matrix.arch }}-${{ matrix.branch }} build
+    runs-on: ubuntu-latest
+    continue-on-error: true
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - arm_cortex-a5_vfpv4
+          - arm_cortex-a7_neon-vfpv4
+          - arm_cortex-a8_vfpv3
+          - arm_cortex-a9
+          - arm_cortex-a9_vfpv3-d16
+          - arm_cortex-a9_neon
+          - arm_cortex-a15_neon-vfpv4
+          - aarch64_cortex-a53
+          - aarch64_cortex-a72
+          - aarch64_cortex-a76
+          - aarch64_generic
+          - mips_24kc
+          - mips_4kec
+          - mips_mips32
+          - mipsel_24kc
+          - mipsel_24kc_24kf
+          - mipsel_74kc
+          - mipsel_mips32
+          - mips64_octeonplus
+          - riscv64_riscv64
+          - riscv64_generic
+          - loongarch64_generic
+          - i386_pentium4
+          - x86_64
+        branch:
+          - openwrt-24.10
+          - openwrt-25.12
+          - SNAPSHOT
+        exclude:
+          - arch: mips_4kec
+            branch: openwrt-25.12
+          - arch: mips_4kec
+            branch: SNAPSHOT
+          - arch: riscv64_riscv64
+            branch: openwrt-25.12
+          - arch: riscv64_riscv64
+            branch: SNAPSHOT
+          - arch: riscv64_generic
+            branch: openwrt-24.10
     defaults:
       run:
         shell: bash
     env:
       OUTPUT_DIR: ${{ github.workspace }}/artifacts
-      SDK_ARCH: aarch64_cortex-a53-openwrt-24.10
+      SDK_ARCH: ${{ matrix.arch }}-${{ matrix.branch }}
+      SDK_BRANCH: ${{ matrix.branch }}
 
     steps:
       - name: Checkout plugin
@@ -39,6 +85,7 @@ jobs:
             printf 'plugin_repository=%s\n' "$GITHUB_REPOSITORY"
             printf 'plugin_commit=%s\n' "$(git -C plugin rev-parse HEAD)"
             printf 'sdk_image=ghcr.io/openwrt/sdk:%s\n' "$SDK_ARCH"
+            printf 'sdk_branch=%s\n' "$SDK_BRANCH"
             printf 'sdk_action_commit=f5813d30eeef3534b58ac7e79c5d8842b6035434\n'
             printf 'feed=opennds\n'
           } | tee "$OUTPUT_DIR/build-info.txt"
@@ -66,27 +113,41 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$OUTPUT_DIR/packages"
-          for pattern in 'luci-app-opennds_*.ipk' 'luci-i18n-opennds-zh-cn_*.ipk'; do
-            mapfile -t packages < <(find sdk-output/bin/packages -type f -name "$pattern")
+          for name in luci-app-opennds luci-i18n-opennds-zh-cn; do
+            mapfile -t packages < <(find sdk-output/bin/packages -type f \
+              \( -name "${name}_*.ipk" -o -name "${name}-[0-9]*.apk" \))
             test "${#packages[@]}" -eq 1
-            name="${pattern%%_*}"
-            tar -xzOf "${packages[0]}" ./control.tar.gz | tar -xzOf - ./control \
-              | tee "$OUTPUT_DIR/$name.control.txt"
-            grep -qx 'Architecture: all' "$OUTPUT_DIR/$name.control.txt"
-            tar -xzOf "${packages[0]}" ./data.tar.gz | tar -tzf - \
-              > "$OUTPUT_DIR/$name.files.txt"
+            test -s "${packages[0]}"
+            case "${packages[0]}" in
+              *.ipk)
+                tar -xzOf "${packages[0]}" ./control.tar.gz | tar -xzOf - ./control \
+                  | tee "$OUTPUT_DIR/$name.control.txt"
+                grep -qx "Package: $name" "$OUTPUT_DIR/$name.control.txt"
+                grep -qx 'Architecture: all' "$OUTPUT_DIR/$name.control.txt"
+                tar -xzOf "${packages[0]}" ./data.tar.gz | tar -tzf - \
+                  > "$OUTPUT_DIR/$name.files.txt"
+                printf 'package_format_%s=ipk\n' "$name" >> "$OUTPUT_DIR/build-info.txt"
+                ;;
+              *.apk)
+                test "$(head -c 3 "${packages[0]}")" = ADB
+                printf 'package_format_%s=apk-v3\n' "$name" >> "$OUTPUT_DIR/build-info.txt"
+                ;;
+            esac
             cp "${packages[0]}" "$OUTPUT_DIR/packages/"
           done
-          grep -qx './usr/share/rpcd/ucode/opennds.uc' "$OUTPUT_DIR/luci-app-opennds.files.txt"
-          grep -qx './usr/libexec/luci-opennds-status.uc' "$OUTPUT_DIR/luci-app-opennds.files.txt"
-          grep -qx './usr/lib/opennds/theme_luci.sh' "$OUTPUT_DIR/luci-app-opennds.files.txt"
-          if grep -qx './etc/config/opennds' "$OUTPUT_DIR/luci-app-opennds.files.txt"; then
-            printf 'Unexpected daemon configuration in plugin package\n' >&2
-            exit 1
+          if test -f "$OUTPUT_DIR/luci-app-opennds.files.txt"; then
+            grep -qx './usr/share/rpcd/ucode/opennds.uc' "$OUTPUT_DIR/luci-app-opennds.files.txt"
+            grep -qx './usr/libexec/luci-opennds-status.uc' "$OUTPUT_DIR/luci-app-opennds.files.txt"
+            grep -qx './usr/lib/opennds/theme_luci.sh' "$OUTPUT_DIR/luci-app-opennds.files.txt"
+            if grep -qx './etc/config/opennds' "$OUTPUT_DIR/luci-app-opennds.files.txt"; then
+              printf 'Unexpected daemon configuration in plugin package\n' >&2
+              exit 1
+            fi
           fi
           docker image inspect sdk --format '{{.Id}}' >> "$OUTPUT_DIR/build-info.txt"
           cd "$OUTPUT_DIR/packages"
-          sha256sum ./*.ipk | tee SHA256SUMS
+          find . -maxdepth 1 -type f \( -name '*.ipk' -o -name '*.apk' \) -print0 \
+            | sort -z | xargs -0 sha256sum | tee SHA256SUMS
 
       - name: Collect SDK build logs
         if: ${{ always() }}
@@ -101,7 +162,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: luci-app-opennds-${{ github.run_number }}
+          name: luci-app-opennds-${{ matrix.arch }}-${{ matrix.branch }}-${{ github.run_number }}
           path: artifacts/
           if-no-files-found: error
           retention-days: 7
