@@ -13,3 +13,5 @@ PKG_LICENSE_FILES:=LICENSE
 PKG_MAINTAINER:=OpenWrt Community
 
 include $(TOPDIR)/feeds/luci/luci.mk
+
+# call BuildPackage - OpenWrt buildroot signature

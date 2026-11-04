@@ -237,6 +237,7 @@ test('packaging has no daemon config, shared key, trusted MAC samples or duplica
 	assert.equal(fs.existsSync(path.join(root, 'root/etc/config/opennds')), false);
 	assert.doesNotMatch(read('root/etc/uci-defaults/80_luci-app-opennds'), /^\s*(?:option faskey|list trustedmac)/m);
 	assert.doesNotMatch(read('Makefile'), /\$\(call BuildPackage/);
+	assert.match(read('Makefile'), /^# call BuildPackage\b/m);
 	assert.match(read('Makefile'), /\+jsonfilter/);
 	assert.match(read('root/lib/upgrade/keep.d/luci-app-opennds'), /portal_theme\.json/);
 });
