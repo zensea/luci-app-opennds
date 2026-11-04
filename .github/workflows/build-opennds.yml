@@ -70,7 +70,7 @@ jobs:
             package/luci-app-opennds/root/usr/lib/opennds/theme_luci.sh
           ./scripts/feeds install -a 2>&1 | tee "$OUTPUT_DIR/feeds-install.log"
 
-          opennds_makefile="$(find package feeds/packages -path '*/opennds/Makefile' -type f -print -quit)"
+          opennds_makefile="$(find package feeds -path '*/opennds/Makefile' -type f -print -quit)"
           test -n "$opennds_makefile"
           opennds_version="$(sed -nE 's/^PKG_VERSION[[:space:]]*:?=[[:space:]]*(.*)/\1/p' "$opennds_makefile" | head -n1)"
           test -n "$opennds_version"
