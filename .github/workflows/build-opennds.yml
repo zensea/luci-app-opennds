@@ -8,60 +8,16 @@ permissions:
 
 jobs:
   build:
-    name: ${{ matrix.arch }}-${{ matrix.branch }} build
+    name: aarch64_cortex-a53-openwrt-24.10 build
     runs-on: ubuntu-latest
-    continue-on-error: true
     timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        arch:
-          - arm_cortex-a5_vfpv4
-          - arm_cortex-a7_neon-vfpv4
-          - arm_cortex-a8_vfpv3
-          - arm_cortex-a9
-          - arm_cortex-a9_vfpv3-d16
-          - arm_cortex-a9_neon
-          - arm_cortex-a15_neon-vfpv4
-          - aarch64_cortex-a53
-          - aarch64_cortex-a72
-          - aarch64_cortex-a76
-          - aarch64_generic
-          - mips_24kc
-          - mips_4kec
-          - mips_mips32
-          - mipsel_24kc
-          - mipsel_24kc_24kf
-          - mipsel_74kc
-          - mipsel_mips32
-          - mips64_octeonplus
-          - riscv64_riscv64
-          - riscv64_generic
-          - loongarch64_generic
-          - i386_pentium4
-          - x86_64
-        branch:
-          - openwrt-24.10
-          - openwrt-25.12
-          - SNAPSHOT
-        exclude:
-          - arch: mips_4kec
-            branch: openwrt-25.12
-          - arch: mips_4kec
-            branch: SNAPSHOT
-          - arch: riscv64_riscv64
-            branch: openwrt-25.12
-          - arch: riscv64_riscv64
-            branch: SNAPSHOT
-          - arch: riscv64_generic
-            branch: openwrt-24.10
     defaults:
       run:
         shell: bash
     env:
       OUTPUT_DIR: ${{ github.workspace }}/artifacts
-      SDK_ARCH: ${{ matrix.arch }}-${{ matrix.branch }}
-      SDK_BRANCH: ${{ matrix.branch }}
+      SDK_ARCH: aarch64_cortex-a53-openwrt-24.10
+      SDK_BRANCH: openwrt-24.10
 
     steps:
       - name: Checkout plugin
@@ -162,7 +118,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: luci-app-opennds-${{ matrix.arch }}-${{ matrix.branch }}-${{ github.run_number }}
+          name: luci-app-opennds-${{ env.SDK_ARCH }}-${{ github.run_number }}
           path: artifacts/
           if-no-files-found: error
           retention-days: 7
