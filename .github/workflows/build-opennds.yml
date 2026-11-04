@@ -109,6 +109,12 @@ jobs:
           grep -qE '^CONFIG_PACKAGE_luci-app-opennds=[ym]$' .config
           grep -qE '^CONFIG_PACKAGE_luci-i18n-opennds-zh-cn=[ym]$' .config
 
+      - name: Build OpenWrt host tools
+        working-directory: immortalwrt
+        run: |
+          set -euo pipefail
+          make -j2 tools/install V=s 2>&1 | tee "$OUTPUT_DIR/openwrt-host-tools.log"
+
       - name: Compile plugin and Chinese translation
         working-directory: immortalwrt
         run: |
