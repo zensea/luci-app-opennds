@@ -1,0 +1,46 @@
+{
+	"admin/services/opennds": {
+		"title": "openNDS Captive Portal",
+		"order": 60,
+		"action": {
+			"type": "alias",
+			"target": "admin/services/opennds/overview"
+		},
+		"depends": {
+			"acl": [ "luci-app-opennds" ]
+		}
+	},
+	"admin/services/opennds/overview": {
+		"title": "Overview & Clients",
+		"order": 10,
+		"action": {
+			"type": "view",
+			"path": "opennds/overview"
+		},
+		"depends": {
+			"acl": [ "luci-app-opennds" ]
+		}
+	},
+	"admin/services/opennds/config": {
+		"title": "Gateway Settings",
+		"order": 20,
+		"action": {
+			"type": "view",
+			"path": "opennds/config"
+		},
+		"depends": {
+			"acl": [ "luci-app-opennds" ]
+		}
+	},
+	"admin/services/opennds/studio": {
+		"title": "Portal Studio",
+		"order": 30,
+		"action": {
+			"type": "view",
+			"path": "opennds/studio"
+		},
+		"depends": {
+			"acl": [ "luci-app-opennds" ]
+		}
+	}
+}

@@ -1,0 +1,21 @@
+{
+	"luci-app-opennds": {
+		"description": "Grant access to openNDS LuCI interface and RPC procedures",
+		"read": {
+			"uci": [ "opennds", "network" ],
+			"ubus": {
+				"luci.opennds": [ "status", "get_log", "get_portal" ],
+				"network.device": [ "status" ],
+				"network.interface": [ "dump" ],
+				"service": [ "list" ]
+			}
+		},
+		"write": {
+			"uci": [ "opennds" ],
+			"ubus": {
+				"luci.opennds": [ "client_action", "reload_service", "save_portal" ],
+				"service": [ "restart" ]
+			}
+		}
+	}
+}

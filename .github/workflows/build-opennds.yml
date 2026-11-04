@@ -1,0 +1,156 @@
+name: Build luci-app-opennds
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: bash
+    env:
+      OUTPUT_DIR: ${{ github.workspace }}/artifacts
+
+    steps:
+      - name: Checkout plugin
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          path: plugin
+          persist-credentials: false
+
+      - name: Install build dependencies
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUTPUT_DIR"
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            build-essential bison cmake cpio file flex gawk gettext git \
+            libelf-dev libncurses-dev libssl-dev python3 python3-dev \
+            python3-setuptools rsync swig unzip wget xz-utils zlib1g-dev zstd
+          df -h "$GITHUB_WORKSPACE" | tee "$OUTPUT_DIR/disk-space.log"
+
+      - name: Run plugin regression tests
+        working-directory: plugin
+        run: |
+          set -euo pipefail
+          node --test tests/regression.test.cjs 2>&1 | tee "$OUTPUT_DIR/regression.log"
+
+      - name: Checkout ImmortalWrt
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: padavanonly/immortalwrt-mt798x-6.6
+          ref: openwrt-24.10-6.6
+          path: immortalwrt
+          persist-credentials: false
+
+      - name: Prepare feeds and plugin
+        working-directory: immortalwrt
+        run: |
+          set -euo pipefail
+          git config --global http.version HTTP/1.1
+          ./scripts/feeds update -a 2>&1 | tee "$OUTPUT_DIR/feeds-update.log"
+          for feed in packages luci routing telephony; do
+            test -d "feeds/$feed/.git"
+          done
+          # Copy only package inputs; local reference configurations stay outside the build.
+          test ! -e package/luci-app-opennds
+          mkdir -p package/luci-app-opennds
+          cp -R ../plugin/Makefile ../plugin/LICENSE ../plugin/htdocs \
+            ../plugin/root ../plugin/po package/luci-app-opennds/
+          find package/luci-app-opennds -type d -exec chmod 755 {} +
+          find package/luci-app-opennds -type f -exec chmod 644 {} +
+          chmod 755 \
+            package/luci-app-opennds/root/etc/uci-defaults/80_luci-app-opennds \
+            package/luci-app-opennds/root/usr/libexec/luci-opennds-restart \
+            package/luci-app-opennds/root/usr/lib/opennds/theme_luci.sh
+          ./scripts/feeds install -a 2>&1 | tee "$OUTPUT_DIR/feeds-install.log"
+
+          opennds_makefile="$(find package feeds/packages -path '*/opennds/Makefile' -type f -print -quit)"
+          test -n "$opennds_makefile"
+          opennds_version="$(sed -nE 's/^PKG_VERSION[[:space:]]*:?=[[:space:]]*(.*)/\1/p' "$opennds_makefile" | head -n1)"
+          test -n "$opennds_version"
+
+          {
+            printf 'plugin_repository=%s\n' "$GITHUB_REPOSITORY"
+            printf 'plugin_commit=%s\n' "$(git -C ../plugin rev-parse HEAD)"
+            printf 'source_repository=padavanonly/immortalwrt-mt798x-6.6\n'
+            printf 'source_branch=openwrt-24.10-6.6\n'
+            printf 'source_commit=%s\n' "$(git rev-parse HEAD)"
+            printf 'target=mediatek/filogic\nopennds_version=%s\n' "$opennds_version"
+            for feed in packages luci routing telephony; do
+              printf 'feed_%s=%s\n' "$feed" "$(git -C "feeds/$feed" rev-parse HEAD)"
+            done
+          } | tee "$OUTPUT_DIR/build-info.txt"
+
+      - name: Configure MT798x package build
+        working-directory: immortalwrt
+        run: |
+          set -euo pipefail
+          cat > .config <<'CONFIG'
+          CONFIG_TARGET_mediatek=y
+          CONFIG_TARGET_mediatek_filogic=y
+          CONFIG_PACKAGE_luci-app-opennds=m
+          CONFIG_LUCI_LANG_zh_Hans=y
+          CONFIG_PACKAGE_luci-i18n-opennds-zh-cn=m
+          # CONFIG_LUCI_CSSTIDY is not set
+          # CONFIG_LUCI_SRCDIET is not set
+          # CONFIG_USE_APK is not set
+          CONFIG
+          make defconfig 2>&1 | tee "$OUTPUT_DIR/defconfig.log"
+          grep -qx 'CONFIG_TARGET_mediatek_filogic=y' .config
+          grep -qx 'CONFIG_PACKAGE_luci-app-opennds=m' .config
+          grep -qx 'CONFIG_PACKAGE_luci-i18n-opennds-zh-cn=m' .config
+          cp .config "$OUTPUT_DIR/build.config"
+
+      - name: Compile plugin and Chinese translation
+        working-directory: immortalwrt
+        run: |
+          set -euo pipefail
+          make -j2 package/lua/host/compile package/luci-base/host/compile V=s \
+            2>&1 | tee "$OUTPUT_DIR/host-tools.log"
+          make package/luci-app-opennds/clean V=s 2>&1 | tee "$OUTPUT_DIR/clean.log"
+          # This package is architecture-independent. Runtime dependencies are installed
+          # from the device's feed; only the host build dependencies are needed here.
+          grep -qx 'LUCI_PKGARCH:=all' package/luci-app-opennds/Makefile
+          make -j2 package/luci-app-opennds/compile NO_DEPS=1 V=s \
+            2>&1 | tee "$OUTPUT_DIR/compile.log"
+
+      - name: Collect packages
+        working-directory: immortalwrt
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUTPUT_DIR/packages"
+          for pattern in 'luci-app-opennds_*.ipk' 'luci-i18n-opennds-zh-cn_*.ipk'; do
+            mapfile -t packages < <(find bin/packages -type f -name "$pattern")
+            test "${#packages[@]}" -eq 1
+            name="${pattern%%_*}"
+            tar -xzOf "${packages[0]}" ./control.tar.gz | tar -xzOf - ./control \
+              | tee "$OUTPUT_DIR/$name.control.txt"
+            grep -qx 'Architecture: all' "$OUTPUT_DIR/$name.control.txt"
+            tar -xzOf "${packages[0]}" ./data.tar.gz | tar -tzf - \
+              > "$OUTPUT_DIR/$name.files.txt"
+            cp "${packages[0]}" "$OUTPUT_DIR/packages/"
+          done
+          grep -qx './usr/share/rpcd/ucode/opennds.uc' "$OUTPUT_DIR/luci-app-opennds.files.txt"
+          grep -qx './usr/libexec/luci-opennds-status.uc' "$OUTPUT_DIR/luci-app-opennds.files.txt"
+          grep -qx './usr/lib/opennds/theme_luci.sh' "$OUTPUT_DIR/luci-app-opennds.files.txt"
+          if grep -qx './etc/config/opennds' "$OUTPUT_DIR/luci-app-opennds.files.txt"; then
+            printf 'Unexpected daemon configuration in plugin package\n' >&2
+            exit 1
+          fi
+          cd "$OUTPUT_DIR/packages"
+          sha256sum ./*.ipk | tee SHA256SUMS
+
+      - name: Upload packages and build logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: luci-app-opennds-${{ github.run_number }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 7

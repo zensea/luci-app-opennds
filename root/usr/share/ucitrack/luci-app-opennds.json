@@ -1,0 +1,4 @@
+{
+	"config": "opennds",
+	"exec": "/usr/libexec/luci-opennds-restart"
+}

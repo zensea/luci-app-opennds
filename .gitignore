@@ -1,0 +1,5 @@
+# Local device reference configurations may contain keys and device-specific data.
+/design-system/
+
+# GitHub Actions build output.
+/artifacts/
