@@ -52,6 +52,28 @@ jobs:
           set -euo pipefail
           node --test tests/regression.test.cjs 2>&1 | tee "$OUTPUT_DIR/regression.log"
 
+      - name: Run native portal filesystem tests
+        env:
+          UCODE_REVISION: 3f64c8089bf3ea4847c96b91df09fbfcaec19e1d
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libjson-c-dev
+          native_root="$RUNNER_TEMP/opennds-ucode-native"
+          mkdir -p "$native_root/source"
+          curl -fL --retry 3 \
+            "https://github.com/jow-/ucode/archive/$UCODE_REVISION.tar.gz" \
+            -o "$native_root/source.tar.gz"
+          tar -xzf "$native_root/source.tar.gz" -C "$native_root/source" --strip-components=1
+          cmake -S "$native_root/source" -B "$native_root/build" \
+            -DUBUS_SUPPORT=OFF -DUCI_SUPPORT=OFF -DULOOP_SUPPORT=OFF
+          cmake --build "$native_root/build" --target ucode fs_lib --parallel 2
+          test "$(id -u)" -ne 0
+          fixture="$(mktemp -d "$RUNNER_TEMP/opennds-portal.XXXXXX")"
+          "$native_root/build/ucode" -L "$native_root/build" \
+            plugin/tests/portal-read.uc plugin/root/usr/share/rpcd/ucode/opennds.uc "$fixture" \
+            2>&1 | tee "$OUTPUT_DIR/native-portal.log"
+
       - name: Build with OpenWrt SDK
         uses: openwrt/gh-action-sdk@f5813d30eeef3534b58ac7e79c5d8842b6035434
         env:

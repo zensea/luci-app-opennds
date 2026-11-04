@@ -1,6 +1,6 @@
 'use strict';
 
-import { open, access, mkdir, rename, unlink, error as fs_error } from 'fs';
+import { open, access, mkdir, rename, unlink, stat, error as fs_error } from 'fs';
 import { connect } from 'ubus';
 import * as uci from 'uci';
 
@@ -189,8 +189,11 @@ const methods = {
 			let fp = open(portal_file, 'r');
 			if (!fp) {
 				let reason = fs_error();
-				if (reason == 'No such file or directory') return { exists: false };
-				return { error: 'Unable to read portal configuration: ' + (reason || 'open failed') };
+				// Some ucode versions do not record open(2) failures in fs.error().
+				let info = stat(portal_file);
+				let stat_reason = fs_error();
+				if (!info && stat_reason == 'No such file or directory') return { exists: false };
+				return { error: 'Unable to read portal configuration: ' + (reason || stat_reason || 'open failed') };
 			}
 			let content = fp.read('all');
 			let read_error = fs_error();

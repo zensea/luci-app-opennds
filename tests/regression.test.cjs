@@ -115,8 +115,8 @@ function backend(options = {}) {
 	const fs_error = () => { const error = lastFsError; lastFsError = null; return error; };
 	const open = (name, mode) => {
 		if (mode === 'r') {
-			if (options.readOpenFails) { lastFsError = 'Permission denied'; return null; }
-			if (!files.has(name)) { lastFsError = 'No such file or directory'; return null; }
+			// The SDK's ucode open() does not set fs.error() when open(2) fails.
+			if (options.readOpenFails || !files.has(name)) return null;
 			return { read: () => { if (options.readFails) { lastFsError = 'Input/output error'; return null; } return files.get(name); }, close: () => !options.readCloseFails };
 		}
 		if (options.openFails) return null;
@@ -126,15 +126,20 @@ function backend(options = {}) {
 			close: () => !options.closeFails
 		};
 	};
+	const stat = name => {
+		if (options.statError) { lastFsError = options.statError; return null; }
+		if (!files.has(name)) { lastFsError = 'No such file or directory'; return null; }
+		return { type: 'file' };
+	};
 	const rename = (from, to) => { if (options.renameFails) return false; files.set(to, files.get(from)); files.delete(from); return true; };
 	const sprintf = (format, ...values) => format.replace(/%[Jsd]/g, token => token === '%J' ? JSON.stringify(values.shift()) : String(values.shift()));
 	const type = value => value === null || value === undefined ? 'null' : Array.isArray(value) ? 'array' : typeof value;
 	const int = value => Number.parseInt(value);
-	const rawMethods = new Function('connect', 'open', 'access', 'mkdir', 'rename', 'unlink', 'uci', 'int', 'match', 'sprintf', 'trim', 'length', 'type', 'replace', 'json', 'split', 'push', 'index', 'die', 'fs_error',
+	const rawMethods = new Function('connect', 'open', 'access', 'mkdir', 'rename', 'unlink', 'uci', 'int', 'match', 'sprintf', 'trim', 'length', 'type', 'replace', 'json', 'split', 'push', 'index', 'die', 'fs_error', 'stat',
 		read(backendPath).replace(/^import .*;\s*$/gm, ''))(
 		connect, open, name => name === '/etc/opennds' ? !options.noDirectory : !options.missingTemplate, () => !options.mkdirFails, rename, name => files.delete(name), { cursor: () => cursor }, int,
 		(value, pattern) => String(value).match(pattern.source === '[[:cntrl:]]' ? /[\x00-\x1f\x7f]/ : pattern), sprintf, value => value.trim(), value => typeof value === 'string' ? Buffer.byteLength(value) : value.length,
-		type, (value, search, replacement) => value.split(search).join(replacement), JSON.parse, (value, separator) => value.split(separator), (array, value) => array.push(value), (value, search) => value.indexOf(search), message => { throw new Error(message); }, fs_error
+		type, (value, search, replacement) => value.split(search).join(replacement), JSON.parse, (value, separator) => value.split(separator), (array, value) => array.push(value), (value, search) => value.indexOf(search), message => { throw new Error(message); }, fs_error, stat
 	)['luci.opennds'];
 	const flush = () => { while (pending.length) pending.shift()(); };
 	// Drain the synthetic event loop for existing unit tests. Concurrency tests
@@ -559,6 +564,19 @@ test('missing portal uses defaults while file access and read errors reject load
 		const app = frontend('studio.js', { get_portal: service.methods.get_portal.call() });
 		await assert.rejects(app.view.load(), /Unable to read portal configuration/);
 		assert.equal(service.updates.length, 0);
+	}
+});
+
+test('portal stat errors remain visible when open provides no error information', async () => {
+	for (const reason of ['Permission denied', 'Not a directory', 'Input/output error']) {
+		const service = backend({ readOpenFails: true, statError: reason });
+		const previous = service.files.get(portalPath);
+		const result = service.methods.get_portal.call();
+		assert.match(result.error, new RegExp(reason));
+		assert.notEqual(result.exists, false);
+		assert.equal(service.files.get(portalPath), previous);
+		assert.equal(service.updates.length, 0);
+		await assert.rejects(frontend('studio.js', { get_portal: result }).view.load(), /Unable to read portal configuration/);
 	}
 });
 
