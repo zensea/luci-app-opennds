@@ -26,30 +26,6 @@
 
 ## 编译
 
-### GitHub Actions
-
-工作流位于 `.github/workflows/build-opennds.yml`，手动触发后使用
-`padavanonly/immortalwrt-mt798x-6.6` 的 `openwrt-24.10-6.6` 分支，按
-`mediatek/filogic` 目标编译本插件和简体中文语言包。
-
-将插件源码和工作流提交到 GitHub 仓库的默认分支，在仓库 **Actions** 中选择
-**Build luci-app-opennds → Run workflow**。首次使用时按页面提示启用 Actions。
-工作流只需仓库读取权限，使用 GitHub 自动提供的 `GITHUB_TOKEN`，无需额外配置 Secrets。
-
-构建成功后，在该次运行的 **Artifacts** 中下载 `luci-app-opennds-运行编号`。
-下载包包含两个 `.ipk`、SHA-256 校验值、实际源码及 feeds 提交号、构建配置和日志；
-文件保留 7 天。构建失败时同样上传已经生成的日志。安装时，设备仍需从兼容的软件源
-获取 Makefile 中声明的运行依赖。工作流会记录源码树中的实际 openNDS 版本。
-
-该插件声明为架构无关包。工作流先构建 Lua 和 LuCI 主机工具，再使用 `NO_DEPS=1`
-构建插件，保留安装包声明的运行依赖。下载内容还包括软件包控制信息和文件清单，
-用于核对包架构、依赖和安装路径。
-
-上传本地项目时，使用 `Makefile`、`LICENSE`、`README.md`、`.gitignore`、`.github/`、
-`htdocs/`、`root/`、`po/` 和 `tests/`。
-
-### 本地源码树
-
 将目录放入 OpenWrt 源码树的 `package/luci-app-opennds`，在 menuconfig 的 LuCI Applications 中选择本插件，然后执行：
 
 ```sh
