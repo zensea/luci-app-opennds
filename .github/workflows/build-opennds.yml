@@ -9,12 +9,13 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-22.04
-    timeout-minutes: 180
+    timeout-minutes: 90
     defaults:
       run:
         shell: bash
     env:
       OUTPUT_DIR: ${{ github.workspace }}/artifacts
+      SDK_ARCH: aarch64_cortex-a53-openwrt-24.10
 
     steps:
       - name: Checkout plugin
@@ -23,16 +24,24 @@ jobs:
           path: plugin
           persist-credentials: false
 
-      - name: Install build dependencies
+      - name: Prepare SDK feed
         run: |
           set -euo pipefail
-          mkdir -p "$OUTPUT_DIR"
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y \
-            build-essential bison cmake cpio file flex gawk gettext git \
-            libelf-dev libncurses-dev libssl-dev python3 python3-dev \
-            python3-setuptools rsync swig unzip wget xz-utils zlib1g-dev zstd
-          df -h "$GITHUB_WORKSPACE" | tee "$OUTPUT_DIR/disk-space.log"
+          mkdir -p "$OUTPUT_DIR" sdk-output feed/luci-app-opennds
+          cp -R plugin/Makefile plugin/LICENSE plugin/htdocs plugin/root plugin/po feed/luci-app-opennds/
+          find feed/luci-app-opennds -type d -exec chmod 755 {} +
+          find feed/luci-app-opennds -type f -exec chmod 644 {} +
+          chmod 755 \
+            feed/luci-app-opennds/root/etc/uci-defaults/80_luci-app-opennds \
+            feed/luci-app-opennds/root/usr/libexec/luci-opennds-restart \
+            feed/luci-app-opennds/root/usr/lib/opennds/theme_luci.sh
+          {
+            printf 'plugin_repository=%s\n' "$GITHUB_REPOSITORY"
+            printf 'plugin_commit=%s\n' "$(git -C plugin rev-parse HEAD)"
+            printf 'sdk_image=ghcr.io/openwrt/sdk:%s\n' "$SDK_ARCH"
+            printf 'sdk_action_commit=f5813d30eeef3534b58ac7e79c5d8842b6035434\n'
+            printf 'feed=opennds\n'
+          } | tee "$OUTPUT_DIR/build-info.txt"
 
       - name: Run plugin regression tests
         working-directory: plugin
@@ -40,101 +49,25 @@ jobs:
           set -euo pipefail
           node --test tests/regression.test.cjs 2>&1 | tee "$OUTPUT_DIR/regression.log"
 
-      - name: Checkout ImmortalWrt
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          repository: padavanonly/immortalwrt-mt798x-6.6
-          ref: openwrt-24.10-6.6
-          path: immortalwrt
-          persist-credentials: false
+      - name: Build with OpenWrt SDK
+        uses: openwrt/gh-action-sdk@f5813d30eeef3534b58ac7e79c5d8842b6035434
+        env:
+          ARCH: ${{ env.SDK_ARCH }}
+          CONTAINER: ghcr.io/openwrt/sdk
+          FEEDNAME: opennds
+          FEED_DIR: ${{ github.workspace }}/feed
+          ARTIFACTS_DIR: ${{ github.workspace }}/sdk-output
+          PACKAGES: luci-app-opennds
+          BUILD_LOG: '1'
+          NO_REFRESH_CHECK: '1'
+          V: s
 
-      - name: Prepare feeds and plugin
-        working-directory: immortalwrt
-        run: |
-          set -euo pipefail
-          git config --global http.version HTTP/1.1
-          ./scripts/feeds update -a 2>&1 | tee "$OUTPUT_DIR/feeds-update.log"
-          for feed in packages luci routing telephony; do
-            test -d "feeds/$feed/.git"
-          done
-          # Copy only package inputs; local reference configurations stay outside the build.
-          test ! -e package/luci-app-opennds
-          mkdir -p package/luci-app-opennds
-          cp -R ../plugin/Makefile ../plugin/LICENSE ../plugin/htdocs \
-            ../plugin/root ../plugin/po package/luci-app-opennds/
-          find package/luci-app-opennds -type d -exec chmod 755 {} +
-          find package/luci-app-opennds -type f -exec chmod 644 {} +
-          chmod 755 \
-            package/luci-app-opennds/root/etc/uci-defaults/80_luci-app-opennds \
-            package/luci-app-opennds/root/usr/libexec/luci-opennds-restart \
-            package/luci-app-opennds/root/usr/lib/opennds/theme_luci.sh
-          ./scripts/feeds install -a 2>&1 | tee "$OUTPUT_DIR/feeds-install.log"
-
-          opennds_makefile="$(find package feeds -path '*/opennds/Makefile' -type f -print -quit)"
-          test -n "$opennds_makefile"
-          opennds_version="$(sed -nE 's/^PKG_VERSION[[:space:]]*:?=[[:space:]]*(.*)/\1/p' "$opennds_makefile" | head -n1)"
-          test -n "$opennds_version"
-
-          {
-            printf 'plugin_repository=%s\n' "$GITHUB_REPOSITORY"
-            printf 'plugin_commit=%s\n' "$(git -C ../plugin rev-parse HEAD)"
-            printf 'source_repository=padavanonly/immortalwrt-mt798x-6.6\n'
-            printf 'source_branch=openwrt-24.10-6.6\n'
-            printf 'source_commit=%s\n' "$(git rev-parse HEAD)"
-            printf 'target=mediatek/filogic\nopennds_version=%s\n' "$opennds_version"
-            for feed in packages luci routing telephony; do
-              printf 'feed_%s=%s\n' "$feed" "$(git -C "feeds/$feed" rev-parse HEAD)"
-            done
-          } | tee "$OUTPUT_DIR/build-info.txt"
-
-      - name: Configure MT798x package build
-        working-directory: immortalwrt
-        run: |
-          set -euo pipefail
-          cat > .config <<'CONFIG'
-          CONFIG_TARGET_mediatek=y
-          CONFIG_TARGET_mediatek_filogic=y
-          CONFIG_PACKAGE_luci-base=y
-          CONFIG_PACKAGE_luci-app-opennds=m
-          CONFIG_LUCI_LANG_zh_Hans=y
-          CONFIG_PACKAGE_luci-i18n-opennds-zh-cn=m
-          # CONFIG_LUCI_CSSTIDY is not set
-          # CONFIG_LUCI_SRCDIET is not set
-          # CONFIG_USE_APK is not set
-          CONFIG
-          make defconfig 2>&1 | tee "$OUTPUT_DIR/defconfig.log"
-          cp .config "$OUTPUT_DIR/build.config"
-          grep -E '^CONFIG_(TARGET_mediatek|PACKAGE_luci-app-opennds|PACKAGE_luci-i18n-opennds|LUCI_LANG)' .config
-          grep -qx 'CONFIG_TARGET_mediatek_filogic=y' .config
-          grep -qE '^CONFIG_PACKAGE_luci-app-opennds=[ym]$' .config
-          grep -qE '^CONFIG_PACKAGE_luci-i18n-opennds-zh-cn=[ym]$' .config
-
-      - name: Build OpenWrt host tools
-        working-directory: immortalwrt
-        run: |
-          set -euo pipefail
-          make -j2 tools/install V=s 2>&1 | tee "$OUTPUT_DIR/openwrt-host-tools.log"
-
-      - name: Compile plugin and Chinese translation
-        working-directory: immortalwrt
-        run: |
-          set -euo pipefail
-          make -j2 package/lua/host/compile package/luci-base/host/compile V=s \
-            2>&1 | tee "$OUTPUT_DIR/host-tools.log"
-          make package/luci-app-opennds/clean V=s 2>&1 | tee "$OUTPUT_DIR/clean.log"
-          # This package is architecture-independent. Runtime dependencies are installed
-          # from the device's feed; only the host build dependencies are needed here.
-          grep -qx 'LUCI_PKGARCH:=all' package/luci-app-opennds/Makefile
-          make -j2 package/luci-app-opennds/compile NO_DEPS=1 V=s \
-            2>&1 | tee "$OUTPUT_DIR/compile.log"
-
-      - name: Collect packages
-        working-directory: immortalwrt
+      - name: Collect and verify packages
         run: |
           set -euo pipefail
           mkdir -p "$OUTPUT_DIR/packages"
           for pattern in 'luci-app-opennds_*.ipk' 'luci-i18n-opennds-zh-cn_*.ipk'; do
-            mapfile -t packages < <(find bin/packages -type f -name "$pattern")
+            mapfile -t packages < <(find sdk-output/bin/packages -type f -name "$pattern")
             test "${#packages[@]}" -eq 1
             name="${pattern%%_*}"
             tar -xzOf "${packages[0]}" ./control.tar.gz | tar -xzOf - ./control \
@@ -151,8 +84,18 @@ jobs:
             printf 'Unexpected daemon configuration in plugin package\n' >&2
             exit 1
           fi
+          docker image inspect sdk --format '{{.Id}}' >> "$OUTPUT_DIR/build-info.txt"
           cd "$OUTPUT_DIR/packages"
           sha256sum ./*.ipk | tee SHA256SUMS
+
+      - name: Collect SDK build logs
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUTPUT_DIR"
+          if test -d sdk-output/logs; then
+            cp -R sdk-output/logs "$OUTPUT_DIR/sdk-logs"
+          fi
 
       - name: Upload packages and build logs
         if: ${{ always() }}
