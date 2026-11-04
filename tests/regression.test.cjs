@@ -220,6 +220,18 @@ test('JavaScript, backend logic and JSON parse; shell scripts pass syntax checks
 	}
 });
 
+test('menu aliases resolve through the path consumed by the LuCI dispatcher', () => {
+	const menu = JSON.parse(read('root/usr/share/luci/menu.d/luci-app-opennds.json'));
+	const action = menu['admin/services/opennds'].action;
+	assert.equal(action.type, 'alias');
+	assert.equal(typeof action.path, 'string', 'LuCI alias dispatch reads action.path');
+	const request = [...action.path.split('/'), ...[]];
+	assert.deepEqual(request, ['admin', 'services', 'opennds', 'overview']);
+	const target = menu[request.join('/')];
+	assert.equal(target.action.type, 'view');
+	assert.ok(fs.existsSync(path.join(root, 'htdocs/luci-static/resources/view', target.action.path + '.js')));
+});
+
 test('backend regular expressions compile as POSIX ERE used by ucode', () => {
 	const literals = (read(backendPath) + '\n' + read('root/usr/libexec/luci-opennds-status.uc')).matchAll(/match\([^,\n]+,\s*(\/(?:\\.|[^\/\n])+\/[gis]*)\)/g);
 	let checked = 0;

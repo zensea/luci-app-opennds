@@ -4,7 +4,7 @@
 		"order": 60,
 		"action": {
 			"type": "alias",
-			"target": "admin/services/opennds/overview"
+			"path": "admin/services/opennds/overview"
 		},
 		"depends": {
 			"acl": [ "luci-app-opennds" ]
