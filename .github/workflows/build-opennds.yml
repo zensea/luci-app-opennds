@@ -94,6 +94,7 @@ jobs:
           cat > .config <<'CONFIG'
           CONFIG_TARGET_mediatek=y
           CONFIG_TARGET_mediatek_filogic=y
+          CONFIG_PACKAGE_luci-base=y
           CONFIG_PACKAGE_luci-app-opennds=m
           CONFIG_LUCI_LANG_zh_Hans=y
           CONFIG_PACKAGE_luci-i18n-opennds-zh-cn=m
@@ -102,10 +103,11 @@ jobs:
           # CONFIG_USE_APK is not set
           CONFIG
           make defconfig 2>&1 | tee "$OUTPUT_DIR/defconfig.log"
-          grep -qx 'CONFIG_TARGET_mediatek_filogic=y' .config
-          grep -qx 'CONFIG_PACKAGE_luci-app-opennds=m' .config
-          grep -qx 'CONFIG_PACKAGE_luci-i18n-opennds-zh-cn=m' .config
           cp .config "$OUTPUT_DIR/build.config"
+          grep -E '^CONFIG_(TARGET_mediatek|PACKAGE_luci-app-opennds|PACKAGE_luci-i18n-opennds|LUCI_LANG)' .config
+          grep -qx 'CONFIG_TARGET_mediatek_filogic=y' .config
+          grep -qE '^CONFIG_PACKAGE_luci-app-opennds=[ym]$' .config
+          grep -qE '^CONFIG_PACKAGE_luci-i18n-opennds-zh-cn=[ym]$' .config
 
       - name: Compile plugin and Chinese translation
         working-directory: immortalwrt
