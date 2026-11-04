@@ -82,6 +82,11 @@ jobs:
                 grep -qx 'Architecture: all' "$OUTPUT_DIR/$name.control.txt"
                 tar -xzOf "${packages[0]}" ./data.tar.gz | tar -tzf - \
                   > "$OUTPUT_DIR/$name.files.txt"
+                if test "$name" = luci-app-opennds; then
+                  mkdir -p "$RUNNER_TEMP/opennds-package"
+                  tar -xzOf "${packages[0]}" ./data.tar.gz \
+                    | tar -xzf - -C "$RUNNER_TEMP/opennds-package"
+                fi
                 printf 'package_format_%s=ipk\n' "$name" >> "$OUTPUT_DIR/build-info.txt"
                 ;;
               *.apk)
@@ -92,6 +97,12 @@ jobs:
             cp "${packages[0]}" "$OUTPUT_DIR/packages/"
           done
           if test -f "$OUTPUT_DIR/luci-app-opennds.files.txt"; then
+            package_views="$RUNNER_TEMP/opennds-package/www/luci-static/resources/view/opennds"
+            for view in config overview studio; do
+              node --check "$package_views/$view.js"
+            done
+            OPENNDS_TEST_VIEWS_DIR="$package_views" node --test plugin/tests/regression.test.cjs \
+              2>&1 | tee "$OUTPUT_DIR/packaged-regression.log"
             grep -qx './usr/share/rpcd/ucode/opennds.uc' "$OUTPUT_DIR/luci-app-opennds.files.txt"
             grep -qx './usr/libexec/luci-opennds-status.uc' "$OUTPUT_DIR/luci-app-opennds.files.txt"
             grep -qx './usr/lib/opennds/theme_luci.sh' "$OUTPUT_DIR/luci-app-opennds.files.txt"

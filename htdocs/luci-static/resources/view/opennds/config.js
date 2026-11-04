@@ -57,7 +57,8 @@ return view.extend({
 		o.placeholder = 'openNDS';
 		o.rmempty = false;
 		o.validate = function(section_id, value) {
-			return /['\r\n]/.test(value || '') ? _('Name cannot contain line breaks or single quotes. Use &#39; for single quotes.') : true;
+			// Parentheses let the SDK's jsmin recognize this regular expression.
+			return (/['\r\n]/).test(value || '') ? _('Name cannot contain line breaks or single quotes. Use &#39; for single quotes.') : true;
 		};
 
 		o = s.taboption('general', form.Value, 'gatewayport', _('Gateway web server port (gatewayport)'),

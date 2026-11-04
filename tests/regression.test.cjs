@@ -6,8 +6,11 @@ const os = require('node:os');
 const { spawnSync } = require('node:child_process');
 
 const root = path.resolve(__dirname, '..');
-const read = name => fs.readFileSync(path.join(root, name), 'utf8');
 const views = 'htdocs/luci-static/resources/view/opennds/';
+const read = name => fs.readFileSync(
+	process.env.OPENNDS_TEST_VIEWS_DIR && name.startsWith(views)
+		? path.join(process.env.OPENNDS_TEST_VIEWS_DIR, name.slice(views.length))
+		: path.join(root, name), 'utf8');
 const backendPath = 'root/usr/share/rpcd/ucode/opennds.uc';
 const portalPath = '/etc/opennds/portal_theme.json';
 function findShell() {
