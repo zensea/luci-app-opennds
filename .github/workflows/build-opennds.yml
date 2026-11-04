@@ -66,6 +66,7 @@ jobs:
             -o "$native_root/source.tar.gz"
           tar -xzf "$native_root/source.tar.gz" -C "$native_root/source" --strip-components=1
           cmake -S "$native_root/source" -B "$native_root/build" \
+            -DCMAKE_C_FLAGS=-Wno-error=discarded-qualifiers \
             -DUBUS_SUPPORT=OFF -DUCI_SUPPORT=OFF -DULOOP_SUPPORT=OFF
           cmake --build "$native_root/build" --target ucode fs_lib --parallel 2
           test "$(id -u)" -ne 0
