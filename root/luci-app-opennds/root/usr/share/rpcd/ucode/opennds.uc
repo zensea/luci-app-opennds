@@ -102,9 +102,8 @@ function configuration_plan(version) {
 	let current = settings();
 	let section = current.section;
 	let result = { version: version, major: int(split(version, '.')[0]), needs_upgrade: false, can_upgrade: false };
-	if (result.major != 10 && result.major != 11) die('Unsupported openNDS version: ' + version);
-	result.local_fasport = result.major == 11 ? '443' : '0';
-	if (result.major != 11) return { status: result, current: current };
+	if (result.major != 11) die('Unsupported openNDS version: ' + version + '; openNDS v11 is required');
+	result.local_fasport = '443';
 	let original = read_config_text();
 	let legacy = section['.anonymous'] == true;
 	if (length(current.sections) != 1 || (!legacy && section['.name'] != 'setup'))
@@ -139,7 +138,7 @@ function configuration_plan(version) {
 }
 
 function inspect_config(callback) {
-	// opennds -v intentionally exits with status 1 in both supported versions.
+	// opennds -v intentionally exits with status 1 in v11.
 	return execute('timeout -s KILL 2 /usr/bin/opennds -v', function(command) {
 		let version = match(command.output || '', /This is openNDS version ([0-9]+\.[0-9]+\.[0-9]+)/);
 		if ((command.code != 0 && command.code != 1) || !version) {
@@ -446,11 +445,11 @@ const methods = {
 				try {
 					let u = current.cursor;
 					let section = current.section['.name'];
-					if ((current.section.login_option_enabled || (diagnostic.major == 11 ? '1' : '0')) == '0' && int(current.section.fasport) > 0 &&
+					if ((current.section.login_option_enabled || '1') == '0' && int(current.section.fasport) > 0 &&
 						!u.set('opennds', section, 'luci_fasport', current.section.fasport))
 						die('Unable to preserve FAS port');
 					if (!u.set('opennds', section, 'gatewayname', replace(clean.title, "'", '&#39;')) ||
-						!u.set('opennds', section, 'fasport', diagnostic.local_fasport) ||
+						!u.set('opennds', section, 'fasport', '443') ||
 						!u.set('opennds', section, 'login_option_enabled', '3') ||
 						!u.set('opennds', section, 'themespec_path', portal_script) || !u.commit('opennds'))
 						die('Unable to commit opennds configuration');

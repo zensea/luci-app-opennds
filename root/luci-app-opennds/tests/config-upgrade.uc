@@ -84,7 +84,7 @@ instance.methods.save_portal.call({ args: { config: { title: 'Native portal', su
 assert(portal_reply.code == 0 && portal_reply.saved, 'Native portal write must survive the SDK flush bug: ' + sprintf('%J', portal_reply));
 assert(json(readfile(instance.directory + '/portal_theme.json')).title == 'Native portal', 'Native portal content must be persisted');
 
-for (let version in ['10.3.1', '12.0.0']) {
+for (let version in ['10.0.0', '12.0.0']) {
 	instance = service(original, version);
 	assert(!call(instance, 'check_config').can_upgrade, 'Unmatched versions must not offer upgrade');
 	assert(call(instance, 'upgrade_config').code != 0 && readfile(instance.path) == original, 'Unmatched versions must remain unchanged');

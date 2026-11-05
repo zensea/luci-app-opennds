@@ -121,8 +121,8 @@ msgstr "1. 动态点击放行 (Dynamic Click to Continue)"
 msgid "2. Username / Email Login"
 msgstr "2. 用户名 / 邮箱登记登录 (User / Email Login)"
 
-msgid "3. Use FAS configuration (defaults to click-to-continue if FAS disabled)"
-msgstr "3. 使用 FAS 配置（未启用 FAS 时为点击放行）"
+msgid "3. External FAS server"
+msgstr "3. 外部 FAS 服务器"
 
 msgid "4. Custom ThemeSpec script"
 msgstr "4. 自定义 ThemeSpec 脚本 (Custom ThemeSpec)"

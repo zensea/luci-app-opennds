@@ -91,7 +91,7 @@ function frontend(file, responses = {}) {
 
 function backend(options = {}) {
 	const files = new Map([[portalPath, JSON.stringify({ title: 'Previous theme' })]]);
-	const config = { '.name': 'cfg000001', '.type': 'opennds', '.anonymous': true, faskey: 'device-specific-test-key', gatewayinterface: 'br-lan', ...options.config };
+	const config = { '.name': 'setup', '.type': 'opennds', '.anonymous': false, faskey: 'device-specific-test-key', gatewayinterface: 'br-lan', ...options.config };
 	const serialize = () => (config['.anonymous'] ? 'config opennds' : "config opennds '" + config['.name'] + "'") + '\n' +
 		Object.entries(config).filter(([key]) => !key.startsWith('.')).flatMap(([key, value]) => (Array.isArray(value) ? value : [value]).map(item =>
 			'\t' + (Array.isArray(value) ? 'list' : 'option') + ' ' + key + " '" + String(item) + "'\n")).join('');
@@ -123,7 +123,7 @@ function backend(options = {}) {
 		pending.push(() => {
 			let response = options.command?.(command) || { code: 0, output: '' };
 			if (command.includes('/usr/bin/opennds -v') && !response.ubusStatus)
-				response = options.versionResult || { code: 1, output: 'This is openNDS version ' + (options.version || '10.3.1') + '\n' };
+				response = options.versionResult || { code: 1, output: 'This is openNDS version ' + (options.version || '11.0.0') + '\n' };
 			callback(response.ubusStatus || 0, { code: response.code, stdout: response.output, stderr: response.stderr });
 		});
 		return { deferred: true };
@@ -179,9 +179,9 @@ const fixture = { mac: '02:00:00:00:00:01', ip: '192.0.2.10', state: 'Preauthent
 const running = () => ({ running: true, pid: '123', data: { clients: { [fixture.mac]: { ...fixture } }, interface: 'br-lan', gateway_port: '2050', version: 'test-version', uptime: '1m' } });
 const click = button => button.attrs.click({ preventDefault() {}, currentTarget: button });
 
-function configuration(config, values = {}, parseError, hints = { hosts: {} }, compatibility = { major: 10, local_fasport: '0' }) {
+function configuration(config, values = {}, parseError, hints = { hosts: {} }, diagnostic = { major: 11, local_fasport: '443' }) {
 	const options = [], inputs = {}, rpcCalls = [];
-	config['.name'] = config['.name'] || 'cfg000001';
+	config['.name'] = config['.name'] || 'setup';
 	const uci = {
 		load: () => hints.uciFails ? Promise.reject(new Error('Unable to load UCI')) : Promise.resolve(config),
 		get: (_, __, name) => config[name],
@@ -216,10 +216,10 @@ function configuration(config, values = {}, parseError, hints = { hosts: {} }, c
 		}
 	}, Flag: 'Flag', Value: 'Value', ListValue: 'ListValue', DynamicList: 'DynamicList' };
 	const rpc = { declare: declaration => { rpcCalls.push(declaration); return () => declaration.method === 'check_config'
-		? Promise.resolve(compatibility) : hints.failed ? Promise.reject(new Error('Host hints unavailable')) : Promise.resolve(hints.hosts); } };
+		? Promise.resolve(diagnostic) : hints.failed ? Promise.reject(new Error('Host hints unavailable')) : Promise.resolve(hints.hosts); } };
 	const view = new Function('view', 'form', 'uci', 'rpc', 'widgets', '_', 'E', read(views + 'config.js'))(
 		{ extend: value => value }, form, uci, rpc, {}, value => value, (tag, attrs, children) => ({ tag, attrs, children }));
-	return view.render([config, hints, compatibility]);
+	return view.render([config, hints, diagnostic]);
 }
 
 function statusHelper(mode, output, options = {}) {
@@ -293,7 +293,7 @@ test('form preserves hidden FAS values and uses daemon defaults', () => {
 	for (const name of ['fasremotefqdn', 'fasremoteip', 'fasport', 'faspath', 'fas_secure_enabled', 'faskey', 'themespec_path']) assert.equal(options.find(option => option.name === name).retain, true, name);
 	assert.equal(options.find(option => option.name === 'sessiontimeout').default, '1440');
 	assert.equal(options.find(option => option.name === 'checkinterval').default, '15');
-	assert.equal(options.find(option => option.name === 'login_option_enabled').default, '0');
+	assert.equal(options.find(option => option.name === 'login_option_enabled').default, '1');
 	assert.equal(options.find(option => option.name === 'fasport').default, undefined);
 	assert.notEqual(options.find(option => option.name === 'gatewayport').validate('', '080'), true);
 
@@ -602,21 +602,21 @@ test('successful portal save selects the installed ThemeSpec and preserves the d
 });
 
 test('saving a local portal disables external FAS and preserves its port for switching back', () => {
-	const service = backend({ config: { fasport: '443', faspath: '/fas/auth.php', fasremotefqdn: 'portal.example.invalid' } });
+	const service = backend({ config: { login_option_enabled: '0', fasport: '8443', faspath: '/fas/auth.php', fasremotefqdn: 'portal.example.invalid' } });
 	assert.equal(service.methods.save_portal.call({ args: { config: theme() } }).code, 0);
-	assert.equal(service.config.fasport, '0');
-	assert.equal(service.config.luci_fasport, '443');
+	assert.equal(service.config.fasport, '443');
+	assert.equal(service.config.luci_fasport, '8443');
 	assert.equal(service.config.faspath, '/fas/auth.php');
 	assert.equal(service.config.fasremotefqdn, 'portal.example.invalid');
 	assert.equal(service.methods.save_portal.call({ args: { config: theme() } }).code, 0);
-	assert.equal(service.config.luci_fasport, '443', 'Repeated saves must not replace the saved port with zero');
+	assert.equal(service.config.luci_fasport, '8443', 'Repeated saves must not replace the saved port with the local initialization port');
 });
 
 for (const mode of ['1', '2', '3']) {
 	test('configuration switches external FAS to local mode ' + mode + ' and restores its port', async () => {
 		const config = { login_option_enabled: '0', fasport: '443', faspath: '/fas/auth.php', faskey: 'existing-device-key' };
 		await configuration(config, { login_option_enabled: mode }).parse();
-		assert.equal(config.fasport, '0');
+		assert.equal(config.fasport, '443');
 		assert.equal(config.luci_fasport, '443');
 		await configuration(config).parse();
 		assert.equal(config.luci_fasport, '443', 'Saving a local mode again must preserve the external port');
@@ -628,11 +628,11 @@ for (const mode of ['1', '2', '3']) {
 	});
 }
 
-test('FAS restoration respects changed and explicitly cleared port values', async () => {
-	for (const port of ['8443', '0', '']) {
-		const config = { login_option_enabled: '3', fasport: '0', luci_fasport: '443' };
+test('FAS restoration respects changed ports and uses the v11 default when cleared', async () => {
+	for (const port of ['8443', '']) {
+		const config = { login_option_enabled: '3', fasport: '443', luci_fasport: '443' };
 		await configuration(config, { login_option_enabled: '0', fasport: port }).parse();
-		assert.equal(config.fasport, port || undefined);
+		assert.equal(config.fasport, port || '443');
 		assert.equal(config.luci_fasport, undefined);
 	}
 });
@@ -645,10 +645,26 @@ test('invalid gateway form input never normalizes or disables FAS', async () => 
 });
 
 const v11 = { major: 11, version: '11.0.0', local_fasport: '443', needs_upgrade: false };
+const legacyConfig = { '.name': 'cfg000001', '.anonymous': true };
 const stopped = command => command.includes('pidof') ? { code: 1, output: '' } : { code: 0, output: '' };
 
+test('non-v11 daemons cannot edit gateway settings or save a portal', async () => {
+	for (const version of ['10.0.0', '12.0.0']) {
+		const service = backend({ version });
+		const original = service.files.get(portalPath);
+		const diagnostic = service.methods.check_config.call();
+		assert.match(diagnostic.error, /openNDS v11 is required/);
+		assert.equal(diagnostic.can_upgrade, false);
+		await assert.rejects(configuration({}, {}, null, undefined, diagnostic).view.load(), /openNDS v11 is required/);
+		assert.notEqual(service.methods.save_portal.call({ args: { config: theme() } }).code, 0);
+		assert.equal(service.files.get(portalPath), original);
+		assert.equal(service.updates.length, 0);
+		assert.ok(!service.commands.some(command => command.includes('init.d/opennds restart')));
+	}
+});
+
 test('stopped v11 diagnoses legacy UCI without exposing secrets or writing files', () => {
-	const service = backend({ version: '11.0.0', command: stopped });
+	const service = backend({ command: stopped, config: legacyConfig });
 	const before = service.files.get(configPath);
 	const status = service.methods.status.call();
 	assert.equal(status.running, false);
@@ -662,6 +678,7 @@ test('stopped v11 diagnoses legacy UCI without exposing secrets or writing files
 
 test('configuration upgrade preserves settings, backs up exact bytes and rejects repeated clicks', () => {
 	const service = backend({ version: '11.0.0', command: stopped, config: {
+		...legacyConfig,
 		gatewayinterface: 'br-guest', trustedmac: [fixture.mac], future_option: 'preserved',
 		login_option_enabled: '3', fasport: '0', luci_fasport: '8443'
 	} });
@@ -685,7 +702,7 @@ test('configuration upgrade preserves settings, backs up exact bytes and rejects
 
 test('upgrade preserves old implicit local and external authentication choices', () => {
 	for (const [config, expectedMode] of [[{}, '1'], [{ login_option_enabled: '0', fasport: '0' }, '1'], [{ fasport: '8443' }, '0']]) {
-		const service = backend({ version: '11.0.0', command: stopped, config });
+		const service = backend({ command: stopped, config: { ...legacyConfig, ...config } });
 		assert.equal(service.methods.upgrade_config.call().code, 0);
 		assert.equal(service.config.login_option_enabled, expectedMode);
 		assert.equal(service.config.fasport, expectedMode === '0' ? '8443' : config.fasport === '0' ? '443' : undefined);
@@ -694,7 +711,7 @@ test('upgrade preserves old implicit local and external authentication choices',
 
 test('configuration upgrade refuses unknown versions, pending edits, ambiguous sections and running daemon', () => {
 	for (const options of [
-		{ version: '10.3.1' }, { version: '12.0.0' },
+		{ version: '10.0.0' }, { version: '12.0.0' },
 		{ versionResult: { code: 127, output: 'not found' } },
 		{ versionResult: { code: 1, output: 'invalid version' } },
 		{ changes: { opennds: [['set', 'cfg000001', 'gatewayname', 'Pending']] } },
@@ -705,7 +722,7 @@ test('configuration upgrade refuses unknown versions, pending edits, ambiguous s
 		{ sections: [ { '.type': 'opennds', '.anonymous': true, '.name': 'a' }, { '.type': 'other', '.name': 'setup' } ] },
 		{ command: () => ({ code: 0, output: '123' }) }
 	]) {
-		const service = backend({ version: '11.0.0', command: stopped, ...options });
+		const service = backend({ command: stopped, ...options, config: { ...legacyConfig, ...options.config } });
 		const original = service.files.get(configPath);
 		assert.notEqual(service.methods.upgrade_config.call().code, 0, JSON.stringify(options));
 		assert.equal(service.files.get(configPath), original);
@@ -716,7 +733,7 @@ test('configuration upgrade refuses unknown versions, pending edits, ambiguous s
 
 test('backup, rename, commit and validation failures leave the original configuration recoverable', () => {
 	for (const options of [{ backupFails: true }, { writeFails: true }, { sectionRenameFails: true }, { commitFails: true }, { corruptCommit: true }]) {
-		const service = backend({ version: '11.0.0', command: stopped, ...options });
+		const service = backend({ command: stopped, config: legacyConfig, ...options });
 		const original = service.files.get(configPath);
 		const result = service.methods.upgrade_config.call();
 		assert.notEqual(result.code, 0, JSON.stringify(options));
@@ -727,7 +744,7 @@ test('backup, rename, commit and validation failures leave the original configur
 });
 
 test('upgrade reports restart failures as partial success and blocks overlapping configuration operations', () => {
-	const service = backend({ version: '11.0.0', command: command => command.includes('restart') ? { code: 1, output: 'restart failed' } : stopped(command) });
+	const service = backend({ config: legacyConfig, command: command => command.includes('restart') ? { code: 1, output: 'restart failed' } : stopped(command) });
 	const replies = [];
 	service.rawMethods.upgrade_config.call({ reply: result => replies.push(result) });
 	assert.notEqual(service.rawMethods.upgrade_config.call({}).code, 0);
@@ -799,7 +816,7 @@ test('v11 designer preserves a stored FAS port and refuses an unmigrated configu
 	assert.equal(service.methods.save_portal.call({ args: { config: theme() } }).code, 0);
 	assert.equal(service.config.fasport, '443');
 	assert.equal(service.config.luci_fasport, '8443');
-	const legacy = backend({ version: '11.0.0' });
+	const legacy = backend({ config: legacyConfig });
 	const before = legacy.files.get(portalPath);
 	assert.notEqual(legacy.methods.save_portal.call({ args: { config: theme() } }).code, 0);
 	assert.equal(legacy.files.get(portalPath), before);
@@ -815,7 +832,7 @@ test('configuration RPC has read access for inspection and write access only for
 test('file writes use checked close instead of relying on the SDK flush return value', () => {
 	const service = backend({ flushFails: true });
 	assert.equal(service.methods.save_portal.call({ args: { config: theme() } }).code, 0);
-	const legacy = backend({ version: '11.0.0', command: stopped, flushFails: true });
+	const legacy = backend({ config: legacyConfig, command: stopped, flushFails: true });
 	assert.equal(legacy.methods.upgrade_config.call().code, 0);
 	assert.doesNotMatch(read(backendPath), /fp\.flush\(/);
 });
@@ -1146,11 +1163,12 @@ test('initial interface selection: ' + scenario.name, () => {
 }
 
 for (const customTrigger of ['', '/usr/bin/custom-opennds-apply']) {
-test('initializer preserves daemon config and existing custom triggers: ' + (customTrigger || 'migrate old init entry'), () => {
+for (const original of [undefined, '', "config opennds\n\toption faskey 'existing-device-key'\n\toption gatewayinterface 'custom-guest'\n"]) {
+test('initializer keeps existing config or creates v11 setup: ' + (original ? 'existing' : original === '' ? 'empty' : 'missing') + ', ' + (customTrigger || 'migrate old init entry'), () => {
 	withTemporaryFiles(directory => {
 		const config = path.join(directory, 'config'), template = path.join(directory, 'theme.sh'), trace = path.join(directory, 'uci-trace');
-		const original = "config opennds\n\toption faskey 'existing-device-key'\n\toption gatewayinterface 'custom-guest'\n";
-		fs.writeFileSync(config, original); fs.writeFileSync(template, '#!/bin/sh\n');
+		if (original !== undefined) fs.writeFileSync(config, original);
+		fs.writeFileSync(template, '#!/bin/sh\n');
 		const script = read('root/etc/uci-defaults/80_luci-app-opennds').replaceAll('/etc/config/opennds', '"$TEST_CONFIG"').replace('chmod 0755 /usr/lib/opennds/theme_luci.sh /usr/libexec/luci-opennds-restart', 'chmod 0755 "$TEST_THEME"').replaceAll('/etc/init.d/ucitrack', '"$TEST_UCITRACK"').replace('/etc/init.d/rpcd reload', 'true');
 		const uci = `uci() {
 printf '%s\\n' "$*" >> "$TEST_TRACE"
@@ -1163,12 +1181,13 @@ return 0
 }\n`;
 		const result = spawnSync(shell, [], { input: uci + script, encoding: 'utf8', env: { ...process.env, TEST_CONFIG: shellPath(config), TEST_THEME: shellPath(template), TEST_TRACE: shellPath(trace), TEST_CUSTOM_TRIGGER: customTrigger } });
 		assert.equal(result.status, 0, result.stderr || String(result.error));
-		assert.equal(fs.readFileSync(config, 'utf8'), original);
+		assert.equal(fs.readFileSync(config, 'utf8'), original || "config opennds 'setup'\n");
 		const calls = fs.readFileSync(trace, 'utf8');
 		if (customTrigger) assert.doesNotMatch(calls, /set ucitrack/);
 		else assert.match(calls, /set ucitrack\.@opennds\[0\]\.exec=\/usr\/libexec\/luci-opennds-restart/);
 	});
 });
+}
 }
 
 test('real shell template escapes branding and tokens, and retains the native authentication callback', () => {

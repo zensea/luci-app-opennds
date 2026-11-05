@@ -1,6 +1,6 @@
 # 初始配置示例
 
-适用于已经安装本插件及依赖、通过路由器上网的访客网络。终端阅读条款并点击同意后上网，门户使用本插件的本地 ThemeSpec 模板。
+适用于已经安装 openNDS v11、本插件及依赖，通过路由器上网的访客网络。终端阅读条款并点击同意后上网，门户使用本插件的本地 ThemeSpec 模板。
 
 应用时优先选择已就绪的访客接口，找不到时回退到 `br-lan`。所选接口上的普通终端将进入认证流程。接口必须已经存在、已启用且具有 IPv4 地址，客户端的 DHCP、DNS 和路由上网也应已经正常；本示例不创建网络、DHCP、SSID 或防火墙隔离策略。
 
@@ -13,7 +13,7 @@
 | 网关接口 | 优先访客接口，其次 `br-lan` | 自动选择并显示最终设备名 |
 | 网关名称 | 访客 Wi-Fi | 与门户标题一致 |
 | 认证方式 | `login_option_enabled=3` | 使用 `/usr/lib/opennds/theme_luci.sh` |
-| 外部 FAS | `fasport=0` | 使用本地点击同意流程 |
+| 本地认证初始化 | `fasport=443` | 配合模式 `3` 使用本地点击同意流程 |
 | 门户端口 | `2050` | 与 LuCI 的 HTTP 端口分开 |
 | 会话有效期 | 120 分钟 | 到期后重新认证 |
 | 已认证空闲超时 | 15 分钟 | 释放长时间无流量的会话 |
@@ -38,13 +38,13 @@ sh /tmp/opennds-initial/select-interface.sh
 test -x /usr/lib/opennds/theme_luci.sh
 test -r /usr/lib/opennds/theme_click-to-continue-basic.sh
 command -v jsonfilter
-uci -q get opennds.@opennds[0]
+uci -q get opennds.setup
 uci changes opennds
 ```
 
 第一条命令输出本次会使用的设备名，例如 `br-guest` 或 `br-lan`。如果输出 `br-lan`，应用后该网桥上的普通终端也需要认证。`uci changes opennds` 应没有输出；如有待提交变更，先处理这些变更，再应用示例。若 section 不存在，先检查 openNDS 的安装及初始化状态。
 
-openNDS v11 必须先在插件运行总览处理旧配置升级，确认配置段已命名为 `setup`。下面的应用命令按守护进程版本选择本地认证端口。
+若设备沿用了旧配置，先在插件运行总览处理配置升级，确认配置段已命名为 `setup`。下面的应用命令仅支持 openNDS v11。
 
 在路由器上备份现有配置：
 
@@ -62,9 +62,8 @@ printf '备份目录：%s\n' "$backup_dir"
 
 ```sh
 case "$(opennds -v 2>&1)" in
-    'This is openNDS version 10.'*) local_fasport=0 ;;
-    'This is openNDS version 11.'*) local_fasport=443 ;;
-    *) printf '无法识别 openNDS 版本，停止应用配置。\n' >&2; exit 1 ;;
+    'This is openNDS version 11.'*) ;;
+    *) printf '需要 openNDS v11，停止应用配置。\n' >&2; exit 1 ;;
 esac
 gateway_interface="$(sh /tmp/opennds-initial/select-interface.sh)" &&
 printf '使用网关接口：%s\n' "$gateway_interface" &&
@@ -73,8 +72,7 @@ portal_tmp="$(mktemp /etc/opennds/.portal-initial.XXXXXX)" &&
 cp /tmp/opennds-initial/portal_theme.json "$portal_tmp" &&
 chmod 600 "$portal_tmp" &&
 mv -f "$portal_tmp" /etc/opennds/portal_theme.json &&
-uci set "opennds.@opennds[0].gatewayinterface=$gateway_interface" &&
-uci set "opennds.@opennds[0].fasport=$local_fasport" &&
+uci set "opennds.setup.gatewayinterface=$gateway_interface" &&
 uci batch < /tmp/opennds-initial/gateway.uci &&
 /etc/init.d/opennds restart
 ```

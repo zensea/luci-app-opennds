@@ -2,7 +2,7 @@
 
 # opennds owns this file. Never replace its configuration or generated faskey.
 if [ ! -s /etc/config/opennds ]; then
-	printf 'config opennds\n' > /etc/config/opennds || exit 1
+	printf "config opennds 'setup'\n" > /etc/config/opennds || exit 1
 fi
 
 # ThemeSpec files must be executable, including when installed from a Windows checkout.
