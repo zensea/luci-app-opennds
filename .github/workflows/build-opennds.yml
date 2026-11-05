@@ -218,7 +218,7 @@ jobs:
               exit 1
             fi
           fi
-          python3 - "$RUNNER_TEMP/opennds-daemon" <<'PY'
+          python3 - "$RUNNER_TEMP/opennds-daemon" source/root/opennds <<'PY'
           import os, pathlib, struct, sys
           payload = pathlib.Path(sys.argv[1])
           for filename in ('opennds', 'ndsctl'):
@@ -227,9 +227,10 @@ jobs:
               assert struct.unpack_from('<H', binary, 18)[0] == 183, 'Expected AArch64 binary'
           binary = (payload / 'usr/bin/opennds').read_bytes()
           assert ('This is openNDS version ' + os.environ['OPENNDS_PACKAGE_VERSION']).encode() in binary
-          config = (payload / 'etc/config/opennds').read_text()
-          assert config.splitlines()[0] == "config opennds 'setup'"
-          print('Official daemon architecture, version and named configuration verified')
+          config = (payload / 'etc/config/opennds').read_bytes()
+          official_config = (pathlib.Path(sys.argv[2]) / 'linux_openwrt/opennds/files/etc/config/opennds').read_bytes()
+          assert config == official_config, 'Packaged configuration differs from official source'
+          print('Official daemon architecture, version and original configuration verified')
           PY
           docker image inspect sdk --format '{{.Id}}' >> "$OUTPUT_DIR/build-info.txt"
           cd "$verified_packages"
