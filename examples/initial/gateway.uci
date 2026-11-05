@@ -1,8 +1,7 @@
 # UCI batch input for an installed luci-app-opennds instance.
-# Review gatewayinterface and back up /etc/config/opennds before applying.
-# Apply with: uci batch < gateway.uci
+# Select gatewayinterface with select-interface.sh and back up the current config.
+# See README.md for the complete application sequence.
 set opennds.@opennds[0].enabled='1'
-set opennds.@opennds[0].gatewayinterface='br-lan'
 set opennds.@opennds[0].gatewayname='访客 Wi-Fi'
 set opennds.@opennds[0].gatewayport='2050'
 set opennds.@opennds[0].gatewayfqdn='status.client'

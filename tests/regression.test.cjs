@@ -816,6 +816,61 @@ function withTemporaryFiles(callback) {
 	finally { for (const name of fs.readdirSync(directory)) fs.unlinkSync(path.join(directory, name)); fs.rmdirSync(directory); }
 }
 
+const readyGatewayDevice = { up: true, ipv4: true };
+const initialInterfaceCases = [
+	{ name: 'prefers guest and resolves its actual device',
+		networks: { guest_other: { device: 'br-other', up: true }, guest: { device: 'phy0-ap1', up: true } },
+		devices: { 'phy0-ap1': readyGatewayDevice, 'br-other': readyGatewayDevice, 'br-guest': readyGatewayDevice, 'br-lan': readyGatewayDevice }, expected: 'phy0-ap1' },
+	{ name: 'recognizes a guest network suffix', networks: { wan: { device: 'eth1', up: true }, wifi_guest: { device: 'br-visitors', up: true } },
+		devices: { eth1: readyGatewayDevice, 'br-visitors': readyGatewayDevice, 'br-lan': readyGatewayDevice }, expected: 'br-visitors' },
+	{ name: 'uses the network assigned to the guest firewall zone', networks: { visitors: { device: 'br-visitors', up: true } },
+		zones: [{ section: 'guest_zone', name: 'guest', networks: 'visitors' }],
+		devices: { 'br-visitors': readyGatewayDevice, 'br-lan': readyGatewayDevice }, expected: 'br-visitors' },
+	{ name: 'recognizes a ready br-guest device', devices: { 'br-guest': readyGatewayDevice, 'br-lan': readyGatewayDevice }, expected: 'br-guest' },
+	{ name: 'falls back when the guest has only IPv6', networks: { guest: { device: 'br-guest', up: true } },
+		devices: { 'br-guest': { up: true, ipv4: false }, 'br-lan': readyGatewayDevice }, expected: 'br-lan' },
+	{ name: 'falls back when the guest is down', networks: { guest: { device: 'br-guest', up: false } },
+		devices: { 'br-guest': { up: false, ipv4: true }, 'br-lan': readyGatewayDevice }, expected: 'br-lan' },
+	{ name: 'does not choose WAN when no gateway is ready', networks: { wan: { device: 'eth1', up: true } },
+		devices: { eth1: readyGatewayDevice }, expected: null },
+	{ name: 'rejects a fallback without IPv4', devices: { 'br-lan': { up: true, ipv4: false } }, expected: null }
+];
+
+for (const scenario of initialInterfaceCases) {
+test('initial interface selection: ' + scenario.name, () => {
+	withTemporaryFiles(directory => {
+		const functionsFile = path.join(directory, 'functions.sh'), networkFile = path.join(directory, 'network.sh');
+		const quote = value => "'" + String(value).replaceAll("'", "'\\''") + "'";
+		const assign = value => 'IFS= read -r "$1" <<\'MOCK_VALUE\'\n' + value + '\nMOCK_VALUE\n';
+		const networks = Object.entries(scenario.networks || {}), zones = scenario.zones || [];
+		const forNetwork = networks.map(([name]) => '"$1" ' + quote(name)).join('\n') || ':';
+		const forZone = zones.map(zone => '"$1" ' + quote(zone.section)).join('\n') || ':';
+		const zoneProperties = zones.flatMap(zone => [[zone.section + ':name', zone.name], [zone.section + ':network', zone.networks]]);
+		const config = 'config_load() { mock_package="$1"; }\n' +
+			'config_foreach() { case "$mock_package:$2" in\nnetwork:interface)\n' + forNetwork + '\n;;\nfirewall:zone)\n' + forZone + '\n;;\nesac\n}\n' +
+			'config_get() { case "$2:$3" in\n' + zoneProperties.map(([key, value]) => quote(key) + ')\n' + assign(value) + ';;').join('\n') + '\n*) return 1;;\nesac\n}\n';
+		const ipCases = Object.entries(scenario.devices).flatMap(([name, state]) => [
+			["link show dev " + name, '3: ' + name + ': <BROADCAST,MULTICAST' + (state.up ? ',UP' : '') + '> mtu 1500\n'],
+			["-4 addr show dev " + name, state.ipv4 ? '    inet 192.0.2.1/24 scope global ' + name + '\n' : '    inet6 fd00::1/64 scope global\n']
+		]);
+		const ip = 'ip() { case "$*" in\n' + ipCases.map(([key, value]) => quote(key) + ') printf %s ' + quote(value) + ';;').join('\n') + '\n*) return 1;;\nesac\n}\n';
+		const network = 'network_is_up() { case "$1" in\n' + networks.map(([name, state]) => quote(name) + ') return ' + (state.up ? '0' : '1') + ';;').join('\n') + '\n*) return 1;;\nesac\n}\n' +
+			'network_get_device() { case "$2" in\n' + networks.map(([name, state]) => quote(name) + ')\n' + assign(state.device) + ';;').join('\n') + '\n*) return 1;;\nesac\n}\n';
+		fs.writeFileSync(functionsFile, config + ip); fs.writeFileSync(networkFile, network);
+		const source = read('examples/initial/select-interface.sh').replace('. /lib/functions.sh', '. "$TEST_FUNCTIONS"').replace('. /lib/functions/network.sh', '. "$TEST_NETWORK_FUNCTIONS"');
+		const result = spawnSync(shell, [], { input: source, encoding: 'utf8', env: { ...process.env, TEST_FUNCTIONS: shellPath(functionsFile), TEST_NETWORK_FUNCTIONS: shellPath(networkFile) } });
+		if (scenario.expected) {
+			assert.equal(result.status, 0, result.stderr || String(result.error));
+			assert.equal(result.stdout.trim(), scenario.expected);
+		} else {
+			assert.notEqual(result.status, 0);
+			assert.equal(result.stdout, '');
+			assert.match(result.stderr, /No ready IPv4/);
+		}
+	});
+});
+}
+
 for (const customTrigger of ['', '/usr/bin/custom-opennds-apply']) {
 test('initializer preserves daemon config and existing custom triggers: ' + (customTrigger || 'migrate old init entry'), () => {
 	withTemporaryFiles(directory => {
