@@ -58,7 +58,7 @@ let instance = service(original, '11.0.0');
 assert(call(instance, 'status').configuration.can_upgrade, 'Stopped v11 must expose a repairable configuration');
 assert(readfile(instance.path) == original, 'Detection must not write configuration');
 let result = call(instance, 'upgrade_config');
-assert(result.code == 0 && result.upgraded, 'Native UCI migration must succeed');
+assert(result.code == 0 && result.upgraded, 'Native UCI migration must succeed: ' + sprintf('%J', result));
 assert(readfile(result.backup) == original, 'Backup must preserve every original byte');
 assert((stat(result.backup).mode & 0x1ff) == 0x180, 'Backup permissions must be 0600');
 let ctx = cursor(instance.directory, instance.deltas, '');

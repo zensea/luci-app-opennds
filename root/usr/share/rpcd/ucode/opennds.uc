@@ -126,6 +126,8 @@ function configuration_plan(version) {
 	if ((mode == '1' || mode == '2' || mode == '3') && port == '0') values.fasport = '443';
 	result.needs_upgrade = legacy || length(keys(values)) > 0;
 	if (result.needs_upgrade) {
+		if (section.binauth && section.binauth != '/usr/lib/opennds/binauth_log.sh')
+			die('Custom BinAuth requires manual migration before upgrading');
 		let changes = current.cursor.changes('opennds');
 		if (changes == null) die('Unable to check pending configuration changes');
 		if (length(keys(changes))) die('Apply or discard pending openNDS changes before upgrading');
