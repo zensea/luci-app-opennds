@@ -1,0 +1,3 @@
+[submodule "opennds"]
+	path = root/opennds
+	url = https://github.com/openNDS/openNDS.git

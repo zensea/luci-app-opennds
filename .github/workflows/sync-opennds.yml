@@ -1,0 +1,72 @@
+name: Sync official openNDS release
+
+on:
+  schedule:
+    - cron: '17 20 * * *' # 04:17 UTC+8
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: opennds-release-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      changed: ${{ steps.sync.outputs.changed }}
+      ref: ${{ steps.sync.outputs.ref }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Sync latest official release
+        id: sync
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          test -e root/opennds/.git
+          test -z "$(git status --porcelain)"
+          test -z "$(git -C root/opennds status --porcelain)"
+          release="$(gh api repos/openNDS/openNDS/releases/latest)"
+          tag="$(node -e 'const r = JSON.parse(require("node:fs").readFileSync(0, "utf8")); if (r.draft !== false || r.prerelease !== false || typeof r.tag_name !== "string") process.exit(1); process.stdout.write(r.tag_name);' <<< "$release")"
+          [[ "$tag" =~ ^[vV]?[0-9][0-9A-Za-z.+_-]*$ ]]
+          # The commits API peels annotated tags to the actual source commit.
+          target="$(gh api "repos/openNDS/openNDS/commits/tags/$tag" --jq .sha)"
+          [[ "$target" =~ ^[0-9a-f]{40}$ ]]
+          current="$(git -C root/opennds rev-parse HEAD)"
+          printf 'Official release: %s\nCurrent source: %s\nRelease source: %s\n' "$tag" "$current" "$target"
+          if test "$current" = "$target"; then
+            printf 'changed=false\nref=%s\n' "$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git -C root/opennds fetch --depth 1 origin "$target"
+          git -C root/opennds checkout --detach "$target"
+          test "$(git -C root/opennds rev-parse HEAD)" = "$target"
+          test -z "$(git -C root/opennds status --porcelain)"
+          git add -- root/opennds
+          test "$(git diff --cached --name-only)" = root/opennds
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m "chore(opennds): sync $tag (${target:0:12})"
+          git push origin "HEAD:refs/heads/$DEFAULT_BRANCH"
+          printf 'changed=true\nref=%s\n' "$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: sync
+    if: needs.sync.outputs.changed == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-opennds.yml
+    with:
+      ref: ${{ needs.sync.outputs.ref }}
