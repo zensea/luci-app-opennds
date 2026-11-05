@@ -74,9 +74,10 @@ function write_exclusive(path, content) {
 	let fp = open(path, 'wx', 0x180); // 0600; never overwrite a prior backup or symlink.
 	if (!fp) return false;
 	let written = fp.write(content);
-	let flushed = fp.flush();
+	// fclose() flushes buffered data and reports write errors. Some SDK ucode
+	// versions invert fflush() success, making file.flush() unreliable.
 	let closed = fp.close();
-	if (written == length(content) && flushed && closed) return true;
+	if (written == length(content) && closed) return true;
 	unlink(path);
 	return false;
 }
@@ -436,9 +437,8 @@ const methods = {
 				if (!fp) { request.reply({ code: 2, message: 'Unable to write portal configuration' }); return; }
 				let content = sprintf('%J\n', clean);
 				let written = fp.write(content);
-				let flushed = fp.flush();
 				let closed = fp.close();
-				if (written != length(content) || !flushed || !closed || !rename(temporary, portal_file)) {
+				if (written != length(content) || !closed || !rename(temporary, portal_file)) {
 					unlink(temporary);
 					request.reply({ code: 2, message: 'Unable to persist portal configuration' }); return;
 				}

@@ -15,6 +15,8 @@ function service(content, version, fault) {
 	assert(mkdir(directory, 0x1c0) && mkdir(deltas, 0x1c0), 'Unable to create fixture directories');
 	const path = directory + '/opennds';
 	assert(writefile(path, content), 'Unable to create UCI fixture');
+	const dependency = directory + '/test-dependency';
+	assert(writefile(dependency, '#!/bin/sh\n') && chmod(dependency, 0x1c0), 'Unable to create dependency fixture');
 	let program = replace(source, "import { connect } from 'ubus';", `
 		const test_calls = [];
 		function connect() {
@@ -32,6 +34,10 @@ function service(content, version, fault) {
 		'import { cursor as native_cursor } from "uci";\n' +
 		'const uci = { cursor: function() { return native_cursor(' + sprintf('%J', directory) + ', ' + sprintf('%J', deltas) + ', ""); } };');
 	program = replace(program, "const config_file = '/etc/config/opennds';", 'const config_file = ' + sprintf('%J', path) + ';');
+	program = replace(program, "'/etc/opennds/portal_theme.json'", sprintf('%J', directory + '/portal_theme.json'));
+	program = replace(program, "'/etc/opennds'", sprintf('%J', directory));
+	for (let dependency_path in ['/usr/lib/opennds/theme_luci.sh', '/usr/lib/opennds/theme_click-to-continue-basic.sh', '/usr/bin/jsonfilter'])
+		program = replace(program, "'" + dependency_path + "'", sprintf('%J', dependency));
 	program = replace(program, "return { 'luci.opennds': methods };", 'return { methods: methods, calls: test_calls };');
 	if (fault == 'commit') program = replace(program, "if (!u.commit('opennds'))", 'if (true)');
 	if (fault == 'validation') program = replace(program, 'let checked = configuration_plan(diagnostic.version);', 'let checked = { status: { needs_upgrade: true } };');
@@ -72,6 +78,11 @@ const after = readfile(instance.path);
 assert(!call(instance, 'check_config').needs_upgrade, 'Upgraded configuration must pass reinspection');
 assert(call(instance, 'upgrade_config').code != 0, 'A repeated upgrade must be rejected');
 assert(readfile(instance.path) == after, 'A repeated upgrade must not alter configuration');
+let portal_reply;
+instance.methods.save_portal.call({ args: { config: { title: 'Native portal', subtitle: 'Welcome', logo: 'wifi',
+	primaryColor: '#0284c7', btnText: 'Connect', terms: 'Terms', footer: 'Guest' } }, reply: function(value) { portal_reply = value; } });
+assert(portal_reply.code == 0 && portal_reply.saved, 'Native portal write must survive the SDK flush bug: ' + sprintf('%J', portal_reply));
+assert(json(readfile(instance.directory + '/portal_theme.json')).title == 'Native portal', 'Native portal content must be persisted');
 
 for (let version in ['10.3.1', '12.0.0']) {
 	instance = service(original, version);

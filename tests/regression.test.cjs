@@ -558,7 +558,7 @@ test('ndsctl failure does not incorrectly report a live daemon as stopped', () =
 	assert.deepEqual(result.data.clients, {});
 });
 
-for (const failure of ['openFails', 'writeFails', 'flushFails', 'closeFails', 'renameFails']) {
+for (const failure of ['openFails', 'writeFails', 'closeFails', 'renameFails']) {
 	test('portal ' + failure + ' preserves the previous theme and does not commit UCI', () => {
 		const service = backend({ [failure]: true });
 		const previous = service.files.get(portalPath);
@@ -803,6 +803,14 @@ test('configuration RPC has read access for inspection and write access only for
 	assert.ok(acl.read.ubus['luci.opennds'].includes('check_config'));
 	assert.ok(!acl.read.ubus['luci.opennds'].includes('upgrade_config'));
 	assert.ok(acl.write.ubus['luci.opennds'].includes('upgrade_config'));
+});
+
+test('file writes use checked close instead of relying on the SDK flush return value', () => {
+	const service = backend({ flushFails: true });
+	assert.equal(service.methods.save_portal.call({ args: { config: theme() } }).code, 0);
+	const legacy = backend({ version: '11.0.0', command: stopped, flushFails: true });
+	assert.equal(legacy.methods.upgrade_config.call().code, 0);
+	assert.doesNotMatch(read(backendPath), /fp\.flush\(/);
 });
 
 test('corrupt portal JSON rejects the designer load before defaults can be saved', async () => {
