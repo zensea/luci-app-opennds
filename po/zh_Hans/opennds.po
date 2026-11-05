@@ -516,3 +516,6 @@ msgstr "无法检查 openNDS 配置。"
 
 msgid "Upgrade the configuration file from Overview before editing gateway settings."
 msgstr "请先在运行总览升级配置文件，再编辑网关设置。"
+
+msgid "For openNDS v11, select a local authentication mode instead of setting FAS port to 0."
+msgstr "openNDS v11 请直接选择本地认证模式，不要将 FAS 端口设为 0。"

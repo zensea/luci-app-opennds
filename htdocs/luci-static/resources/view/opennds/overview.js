@@ -4,6 +4,7 @@
 'require rpc';
 'require ui';
 'require poll';
+'require uci';
 
 var callOpenndsStatus = rpc.declare({
 	object: 'luci.opennds',
@@ -232,6 +233,7 @@ return view.extend({
 					E('p', { 'class': 'spinning' }, [ _('Backing up the configuration, applying supported changes and restarting openNDS...') ])
 				]);
 				return callUpgradeConfig().then(function(result) {
+					if (result.upgraded) uci.unload('opennds');
 					var backup = result.backup ? ' ' + _('Configuration backup: ') + result.backup : '';
 					if (!result.upgraded || result.code !== 0)
 						throw new Error((result.message || _('Configuration upgrade failed.')) + backup);

@@ -45,6 +45,7 @@ const i18n = text => poTranslations[text] || text;
 
 function frontend(file, responses = {}) {
 	const nodes = [], notifications = [], calls = [], polls = [];
+	const unloaded = [];
 	let removedPolls = 0;
 	const text = node => node == null ? '' : typeof node === 'object' ? node.innerText : String(node);
 	class Element {
@@ -81,11 +82,11 @@ function frontend(file, responses = {}) {
 		} catch (error) { return Promise.reject(error); }
 	} };
 	const ui = { modal: false, showModal() { this.modal = true; }, hideModal() { this.modal = false; }, addNotification(_, node, level) { notifications.push({ level, text: text(node) }); } };
-	const view = new Function('view', 'dom', 'rpc', 'ui', 'poll', 'E', '_', 'L', 'document', read(views + file))(
+	const view = new Function('view', 'dom', 'rpc', 'ui', 'poll', 'E', '_', 'L', 'document', 'uci', read(views + file))(
 		{ extend: value => value }, {}, rpc, ui, { add: fn => polls.push(fn), remove: () => { removedPolls++; } }, E, i18n, { url: value => value },
-		{ getElementById: id => nodes.find(node => node.attrs.id === id) }
+		{ getElementById: id => nodes.find(node => node.attrs.id === id) }, { unload: name => unloaded.push(name) }
 	);
-	return { view, nodes, notifications, calls, polls, removedPolls: () => removedPolls, ui, text, button: label => nodes.find(node => node.tag === 'button' && (text(node) === label || text(node) === i18n(label))) };
+	return { view, nodes, notifications, calls, polls, unloaded, removedPolls: () => removedPolls, ui, text, button: label => nodes.find(node => node.tag === 'button' && (text(node) === label || text(node) === i18n(label))) };
 }
 
 function backend(options = {}) {
@@ -697,6 +698,7 @@ test('configuration upgrade refuses unknown versions, pending edits, ambiguous s
 		{ versionResult: { code: 127, output: 'not found' } },
 		{ versionResult: { code: 1, output: 'invalid version' } },
 		{ changes: { opennds: [['set', 'cfg000001', 'gatewayname', 'Pending']] } },
+		{ config: { binauth: '/usr/lib/opennds/custom-security-check.sh' } },
 		{ loadFails: true }, { noSection: true },
 		{ config: { '.anonymous': false, '.name': 'custom' } },
 		{ sections: [ { '.type': 'opennds', '.anonymous': true, '.name': 'a' }, { '.type': 'opennds', '.anonymous': true, '.name': 'b' } ] },
@@ -751,6 +753,7 @@ test('overview only offers upgrade for a confirmed stopped configuration mismatc
 	assert.equal(button.disabled, false);
 	assert.equal(app.ui.modal, false);
 	assert.equal(page.querySelector('#opennds-config-diagnostic').style.display, 'none');
+	assert.deepEqual(app.unloaded, ['opennds']);
 	assert.match(app.notifications[0].text, /\/etc\/config\/opennds.backup/);
 	for (const res of [{ running: true, configuration: { can_upgrade: true, needs_upgrade: true } }, { running: false },
 		{ unavailable: true, configuration: { can_upgrade: true, needs_upgrade: true } },
@@ -785,6 +788,10 @@ test('v11 gateway form uses native local FAS initialization and preserves the re
 	assert.equal(config.fasport, '8443');
 	assert.equal(config.luci_fasport, undefined);
 	assert.equal(config.faskey, 'unchanged');
+	const port = configuration(config, {}, null, undefined, v11).options.find(option => option.name === 'fasport');
+	assert.notEqual(port.validate('setup', '0'), true);
+	assert.equal(port.validate('setup', '443'), true);
+	assert.equal(port.validate('setup', ''), true);
 });
 
 test('v11 designer preserves a stored FAS port and refuses an unmigrated configuration', () => {

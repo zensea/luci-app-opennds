@@ -519,3 +519,6 @@ msgstr ""
 
 msgid "Upgrade the configuration file from Overview before editing gateway settings."
 msgstr ""
+
+msgid "For openNDS v11, select a local authentication mode instead of setting FAS port to 0."
+msgstr ""

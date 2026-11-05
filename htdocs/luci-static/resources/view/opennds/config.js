@@ -143,6 +143,10 @@ return view.extend({
 		o.retain = true;
 		o.datatype = 'port';
 		o.placeholder = '443';
+		o.validate = function(section_id, value) {
+			return compatibility.major == 11 && value !== '' && value != null && Number(value) === 0
+				? _('For openNDS v11, select a local authentication mode instead of setting FAS port to 0.') : true;
+		};
 		var fasPort = o;
 		fasPort.cfgvalue = function(section_id) {
 			var port = uci.get('opennds', section_id, 'fasport');
