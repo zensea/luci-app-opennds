@@ -5,6 +5,7 @@
 ## 功能
 
 - 网关配置：网络接口、认证模式、FAS、会话超时、限速、流量配额、MAC 信任名单和域名访问名单。
+- 永久免认证 MAC 白名单：读取路由器已发现的主机，按主机名、MAC 和 IP 提示选择，实际保存 MAC 地址；也支持手动输入。读取主机记录失败时会提示，并保留手动输入能力。
 - 运行总览：每 5 秒刷新进程状态、版本、运行时间、终端列表、流量与日志。
 - 终端操作：`auth`、`deauth`、`trust`、`untrust`。域名黑名单通过网关配置管理。
 - 门户设计器：保存标题、颜色、图标、按钮和条款，通过随包安装的 `theme_luci.sh` 渲染真实页面。模板复用 openNDS 原生点击放行流程，认证令牌、日志和配额由 openNDS 处理。
@@ -39,7 +40,7 @@ make package/luci-app-opennds/clean
 make package/luci-app-opennds/compile V=s
 ```
 
-软件包依赖 `opennds`、`rpcd-mod-ucode`、`rpcd-mod-file`、`ucode`、`ucode-mod-fs`、`ucode-mod-uci`、`ucode-mod-ubus`、`jsonfilter`、`coreutils-timeout`。安装前应核对设备软件源中的 openNDS 与所用配置、接口的兼容性。标准 OpenWrt 的 BusyBox 不一定提供 `timeout`，因此显式安装该依赖（`coreutils-timeout` 属于 packages 软件源，编译前需确保已更新安装 `packages` feed）。
+软件包依赖 `opennds`、`rpcd-mod-ucode`、`rpcd-mod-file`、`rpcd-mod-luci`、`ucode`、`ucode-mod-fs`、`ucode-mod-uci`、`ucode-mod-ubus`、`jsonfilter`、`coreutils-timeout`。安装前应核对设备软件源中的 openNDS 与所用配置、接口的兼容性。标准 OpenWrt 的 BusyBox 不一定提供 `timeout`，因此显式安装该依赖（`coreutils-timeout` 属于 packages 软件源，编译前需确保已更新安装 `packages` feed）。
 
 ## 已安装 openNDS 的设备手工部署
 
@@ -48,7 +49,7 @@ make package/luci-app-opennds/compile V=s
 ```sh
 ssh root@192.168.1.1
 opennds -v
-opkg install rpcd-mod-ucode rpcd-mod-file ucode ucode-mod-fs ucode-mod-uci ucode-mod-ubus jsonfilter coreutils-timeout
+opkg install rpcd-mod-ucode rpcd-mod-file rpcd-mod-luci ucode ucode-mod-fs ucode-mod-uci ucode-mod-ubus jsonfilter coreutils-timeout
 cp -p /etc/config/opennds /etc/config/opennds.before-luci.$(date +%Y%m%d-%H%M%S)
 exit
 ```

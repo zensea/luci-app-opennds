@@ -247,6 +247,12 @@ msgstr ""
 msgid "Clients matching these MAC addresses bypass portal authentication entirely."
 msgstr ""
 
+msgid "Choose a discovered device by name, MAC or IP address, or enter a MAC address manually."
+msgstr ""
+
+msgid "Failed to read discovered devices; enter MAC addresses manually or reload the page."
+msgstr ""
+
 msgid "Walled garden FQDN list (walledgarden_fqdn_list)"
 msgstr ""
 

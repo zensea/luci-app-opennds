@@ -7,11 +7,22 @@
 
 return view.extend({
 	load: function() {
-		return uci.load('opennds');
+		var callHostHints = rpc.declare({
+			object: 'luci-rpc',
+			method: 'getHostHints',
+			reject: true,
+			expect: { '': {} }
+		});
+		return Promise.all([
+			uci.load('opennds'),
+			callHostHints().then(function(hosts) { return { hosts: hosts }; })
+				.catch(function() { return { hosts: {}, failed: true }; })
+		]);
 	},
 
-	render: function() {
+	render: function(data) {
 		var m, s, o;
+		var hints = data && data[1] || { hosts: {} };
 
 		m = new form.Map('opennds', _('openNDS Gateway Configuration'),
 			_('Configure network interfaces, authentication policies, FAS, rate limits, and access controls for openNDS.'));
@@ -211,10 +222,38 @@ return view.extend({
 		/* ---------------------------------------------------------
 		 * Tab 4: Access Control & Walled Garden (DynamicList on opennds)
 		 * --------------------------------------------------------- */
-		o = s.taboption('access', form.DynamicList, 'trustedmac', _('Trusted MAC whitelist (trustedmac)'),
-			_('Clients matching these MAC addresses bypass portal authentication entirely.'));
+		var trustedDescription = _('Clients matching these MAC addresses bypass portal authentication entirely.') + '<br />' +
+			_('Choose a discovered device by name, MAC or IP address, or enter a MAC address manually.');
+		if (hints.failed)
+			trustedDescription += '<br /><strong>' + _('Failed to read discovered devices; enter MAC addresses manually or reload the page.') + '</strong>';
+		o = s.taboption('access', form.DynamicList, 'trustedmac', _('Trusted MAC whitelist (trustedmac)'), trustedDescription);
 		o.datatype = 'macaddr';
 		o.placeholder = '00:1E:0B:44:99:A1';
+		var hosts = hints.hosts || {};
+		var storedMacs = Object.create(null), seenMacs = Object.create(null);
+		if (Object.keys(hosts).length) {
+			uci.sections('opennds', 'opennds', function(section) {
+				var values = Array.isArray(section.trustedmac) ? section.trustedmac : [section.trustedmac];
+				values.forEach(function(mac) {
+					if (typeof mac === 'string') storedMacs[mac.toLowerCase()] = mac;
+				});
+			});
+		}
+		Object.keys(hosts).sort().forEach(function(mac) {
+			if (!(/^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i).test(mac) || seenMacs[mac.toLowerCase()]) return;
+			var host = hosts[mac];
+			if (!host || typeof host !== 'object' || Array.isArray(host)) return;
+			seenMacs[mac.toLowerCase()] = true;
+			var details = typeof host.name === 'string' && host.name ? [host.name] : [];
+			['ipaddrs', 'ipv4', 'ip6addrs', 'ipv6'].forEach(function(field) {
+				var addresses = Array.isArray(host[field]) ? host[field] : [host[field]];
+				addresses.forEach(function(address) {
+					if (typeof address === 'string' && address && details.indexOf(address) < 0) details.push(address);
+				});
+			});
+			var value = storedMacs[mac.toLowerCase()] || mac;
+			o.value(value, E('span', {}, [value + (details.length ? ' (' + details.join(' / ') + ')' : '')]));
+		});
 
 		o = s.taboption('access', form.DynamicList, 'walledgarden_fqdn_list', _('Walled garden FQDN list (walledgarden_fqdn_list)'),
 			_('Domains accessible to preauthenticated clients before logging in.'));

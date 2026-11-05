@@ -4,6 +4,7 @@
 		"read": {
 			"uci": [ "opennds", "network" ],
 			"ubus": {
+				"luci-rpc": [ "getHostHints" ],
 				"luci.opennds": [ "status", "get_log", "get_portal" ],
 				"network.device": [ "status" ],
 				"network.interface": [ "dump" ],

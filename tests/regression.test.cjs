@@ -160,17 +160,18 @@ const fixture = { mac: '02:00:00:00:00:01', ip: '192.0.2.10', state: 'Preauthent
 const running = () => ({ running: true, pid: '123', data: { clients: { [fixture.mac]: { ...fixture } }, interface: 'br-lan', gateway_port: '2050', version: 'test-version', uptime: '1m' } });
 const click = button => button.attrs.click({ preventDefault() {}, currentTarget: button });
 
-function configuration(config, values = {}, parseError) {
-	const options = [], inputs = {};
+function configuration(config, values = {}, parseError, hints = { hosts: {} }) {
+	const options = [], inputs = {}, rpcCalls = [];
 	config['.name'] = 'cfg000001';
 	const uci = {
+		load: () => hints.uciFails ? Promise.reject(new Error('Unable to load UCI')) : Promise.resolve(config),
 		get: (_, __, name) => config[name],
 		set: (_, __, name, value) => { config[name] = value; },
 		unset: (_, __, name) => { delete config[name]; },
 		sections: (_, __, callback) => callback(config)
 	};
-	const section = { tab() {}, taboption(_, type, name) {
-		const option = { name, type, deps: [], depends(key, value) { this.deps.push({ key, value }); }, value() {},
+	const section = { tab() {}, taboption(_, type, name, title, description) {
+		const option = { name, type, description, choices: [], deps: [], depends(key, value) { this.deps.push({ key, value }); }, value(value, label) { this.choices.push({ value, label }); },
 			cfgvalue: () => config[name], formvalue: () => inputs[name] };
 		options.push(option);
 		return option;
@@ -179,6 +180,7 @@ function configuration(config, values = {}, parseError) {
 		section() { return section; }
 		render() {
 			for (const option of options) inputs[option.name] = Object.hasOwn(values, option.name) ? values[option.name] : option.cfgvalue(config['.name']) ?? option.default;
+			this.options = options; this.view = view; this.rpcCalls = rpcCalls;
 			return this;
 		}
 		parse() {
@@ -194,9 +196,10 @@ function configuration(config, values = {}, parseError) {
 			return Promise.resolve();
 		}
 	}, Flag: 'Flag', Value: 'Value', ListValue: 'ListValue', DynamicList: 'DynamicList' };
-	const view = new Function('view', 'form', 'uci', 'rpc', 'widgets', '_', read(views + 'config.js'))(
-		{ extend: value => value }, form, uci, {}, {}, value => value);
-	return view.render();
+	const rpc = { declare: declaration => { rpcCalls.push(declaration); return () => hints.failed ? Promise.reject(new Error('Host hints unavailable')) : Promise.resolve(hints.hosts); } };
+	const view = new Function('view', 'form', 'uci', 'rpc', 'widgets', '_', 'E', read(views + 'config.js'))(
+		{ extend: value => value }, form, uci, rpc, {}, value => value, (tag, attrs, children) => ({ tag, attrs, children }));
+	return view.render([config, hints]);
 }
 
 function statusHelper(mode, output, options = {}) {
@@ -288,6 +291,78 @@ test('form preserves hidden FAS values and uses daemon defaults', () => {
 	assert.equal(faspath.validate('', ''), true, 'empty path must pass');
 	assert.notEqual(faspath.validate('', 'no-leading-slash'), true, 'path without leading / must be rejected');
 	assert.notEqual(faspath.validate('', '/path with spaces'), true, 'path with spaces must be rejected');
+});
+
+test('trusted MAC picker reads host hints through the read-only LuCI RPC', async () => {
+	const hosts = { [fixture.mac]: { name: 'Printer', ipaddrs: [fixture.ip] } };
+	const config = { trustedmac: [fixture.mac] };
+	const form = configuration(config, {}, null, { hosts });
+	const data = await form.view.load();
+	assert.deepEqual(data[1], { hosts });
+	assert.deepEqual(form.rpcCalls, [{ object: 'luci-rpc', method: 'getHostHints', reject: true, expect: { '': {} } }]);
+	assert.deepEqual(config.trustedmac, [fixture.mac]);
+});
+
+test('trusted MAC picker labels devices with names and IPv4/IPv6 while preserving stored MAC spelling', () => {
+	const mac = 'AA:BB:CC:DD:EE:02';
+	const saved = mac.toLowerCase();
+	const config = { trustedmac: [saved, fixture.mac] };
+	const hosts = { [mac]: { name: 'Printer', ipaddrs: ['192.0.2.20'], ipv4: ['192.0.2.20', '192.0.2.21'], ip6addrs: ['2001:db8::20'] },
+		[fixture.mac]: { ipv4: '192.0.2.10', ipv6: ['2001:db8::10'] } };
+	const picker = configuration(config, {}, null, { hosts }).options.find(option => option.name === 'trustedmac');
+	assert.equal(picker.type, 'DynamicList');
+	assert.equal(picker.datatype, 'macaddr');
+	assert.equal(picker.choices.length, 2);
+	const label = picker.choices.find(choice => choice.value === saved).label.children[0];
+	for (const text of [saved, 'Printer', '192.0.2.20', '192.0.2.21', '2001:db8::20']) assert.ok(label.includes(text));
+	assert.equal(label.match(/192\.0\.2\.20/g).length, 1);
+	assert.deepEqual(config.trustedmac, [saved, fixture.mac]);
+});
+
+test('trusted MAC picker skips malformed records and deduplicates MAC addresses without case sensitivity', () => {
+	const hosts = { 'AA:BB:CC:DD:EE:02': null, 'aa:bb:cc:dd:ee:02': { name: 'Valid after invalid record' },
+		'AA:BB:CC:DD:EE:03': {}, 'aa:bb:cc:dd:ee:03': { name: 'Duplicate' },
+		'00:11:22:33:44:55': 'invalid host', '00:11:22:33:44:66': [], 'not-a-mac': {} };
+	const picker = configuration({}, {}, null, { hosts }).options.find(option => option.name === 'trustedmac');
+	assert.deepEqual(picker.choices.map(choice => choice.value.toLowerCase()).sort(), ['aa:bb:cc:dd:ee:02', 'aa:bb:cc:dd:ee:03']);
+});
+
+test('trusted MAC picker renders untrusted hostnames as DOM text', () => {
+	const name = '<img src=x onerror=alert(1)>';
+	const picker = configuration({}, {}, null, { hosts: { [fixture.mac]: { name, ipaddrs: [fixture.ip] } } }).options.find(option => option.name === 'trustedmac');
+	const label = picker.choices[0].label;
+	assert.equal(label.tag, 'span');
+	assert.equal(label.children.length, 1);
+	assert.equal(typeof label.children[0], 'string');
+	assert.ok(label.children[0].includes(name));
+});
+
+test('trusted MAC picker keeps manual entries when hints are empty or unavailable', async () => {
+	for (const failed of [false, true]) {
+		const config = { trustedmac: [fixture.mac] };
+		const form = configuration(config, {}, null, { hosts: {}, failed });
+		const picker = form.options.find(option => option.name === 'trustedmac');
+		const data = await form.view.load();
+		assert.equal(picker.choices.length, 0);
+		assert.equal(picker.datatype, 'macaddr');
+		assert.notEqual(picker.readonly, true);
+		assert.deepEqual(config.trustedmac, [fixture.mac]);
+		if (failed) {
+			assert.equal(data[1].failed, true);
+			assert.match(picker.description, /Failed to read discovered devices/);
+		} else assert.doesNotMatch(picker.description, /Failed to read discovered devices/);
+	}
+});
+
+test('host hint fallback does not hide UCI configuration load failures', async () => {
+	await assert.rejects(configuration({}, {}, null, { hosts: {}, uciFails: true }).view.load(), /Unable to load UCI/);
+});
+
+test('host hints use a declared runtime dependency and a read-only ACL grant', () => {
+	const acl = JSON.parse(read('root/usr/share/rpcd/acl.d/luci-app-opennds.json'))['luci-app-opennds'];
+	assert.deepEqual(acl.read.ubus['luci-rpc'], ['getHostHints']);
+	assert.equal(acl.write.ubus['luci-rpc'], undefined);
+	assert.match(read('Makefile'), /\+rpcd-mod-luci\b/);
 });
 
 test('JSON counters are converted from kB to MB and trusted entries are merged', () => {
