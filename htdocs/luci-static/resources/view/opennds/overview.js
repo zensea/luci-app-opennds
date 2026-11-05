@@ -27,6 +27,13 @@ var callReloadService = rpc.declare({
 	expect: { '': {} }
 });
 
+var callUpgradeConfig = rpc.declare({
+	object: 'luci.opennds',
+	method: 'upgrade_config',
+	reject: true,
+	expect: { '': {} }
+});
+
 var callGetLog = rpc.declare({
 	object: 'luci.opennds',
 	method: 'get_log',
@@ -212,6 +219,44 @@ return view.extend({
 		]);
 		viewContainer.appendChild(statusCards);
 		viewContainer.appendChild(E('p', { 'id': 'opennds-status-error', 'style': 'color: #ef4444;' }, [ status.error || '' ]));
+		var upgradeBusy = false;
+		var diagnosticText = E('p', {});
+		var upgradeButton = E('button', {
+			'class': 'cbi-button cbi-button-apply',
+			'click': function(ev) {
+				ev.preventDefault();
+				if (upgradeBusy) return Promise.resolve();
+				upgradeBusy = true;
+				upgradeButton.disabled = true;
+				ui.showModal(_('Upgrading openNDS configuration'), [
+					E('p', { 'class': 'spinning' }, [ _('Backing up the configuration, applying supported changes and restarting openNDS...') ])
+				]);
+				return callUpgradeConfig().then(function(result) {
+					var backup = result.backup ? ' ' + _('Configuration backup: ') + result.backup : '';
+					if (!result.upgraded || result.code !== 0)
+						throw new Error((result.message || _('Configuration upgrade failed.')) + backup);
+					ui.addNotification(null, E('p', {}, [ _('Configuration upgraded. Check daemon status and test portal authentication.') + backup ]), 'info');
+				}).catch(function(err) {
+					ui.addNotification(null, E('p', {}, [ err.message ]), 'danger');
+				}).finally(function() {
+					upgradeBusy = false;
+					upgradeButton.disabled = false;
+					ui.hideModal();
+					return refreshClientsNow();
+				});
+			}
+		}, [ _('Upgrade configuration file') ]);
+		var diagnosticBox = E('div', { 'id': 'opennds-config-diagnostic', 'class': 'alert-message warning' }, [ diagnosticText, upgradeButton ]);
+		function updateDiagnostic(res) {
+			var diagnostic = res.configuration || {};
+			var visible = !res.running && !res.unavailable && (diagnostic.error || diagnostic.needs_upgrade);
+			diagnosticBox.style.display = visible ? '' : 'none';
+			diagnosticText.innerText = diagnostic.error || _('The configuration is incompatible with the installed openNDS version. Upgrade it to preserve existing settings and create a backup.');
+			upgradeButton.style.display = visible && diagnostic.can_upgrade ? '' : 'none';
+			upgradeButton.disabled = upgradeBusy;
+		}
+		updateDiagnostic(status);
+		viewContainer.appendChild(diagnosticBox);
 
 		/* =========================================================
 		 * 2. Active Clients Table (ndsctl Controller)
@@ -273,6 +318,7 @@ return view.extend({
 				update('val-port', curData.gateway_port || '-');
 				update('val-uptime', curData.uptime || '-');
 				update('opennds-status-error', res.error || '');
+				updateDiagnostic(res);
 				var logResponse = responses[1];
 				var currentLogs = Array.isArray(logResponse) ? logResponse : logResponse.lines || [];
 				update('opennds-log', currentLogs.length ? currentLogs.join('\n') : _('No relevant logs found'));

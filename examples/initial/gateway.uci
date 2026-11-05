@@ -9,7 +9,7 @@ set opennds.@opennds[0].fwhook_enabled='1'
 set opennds.@opennds[0].allow_preemptive_authentication='1'
 set opennds.@opennds[0].login_option_enabled='3'
 set opennds.@opennds[0].themespec_path='/usr/lib/opennds/theme_luci.sh'
-set opennds.@opennds[0].fasport='0'
+# Set fasport for the installed daemon version before applying this batch.
 set opennds.@opennds[0].maxclients='50'
 set opennds.@opennds[0].sessiontimeout='120'
 set opennds.@opennds[0].authidletimeout='15'

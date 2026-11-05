@@ -13,16 +13,25 @@ return view.extend({
 			reject: true,
 			expect: { '': {} }
 		});
+		var callCheckConfig = rpc.declare({
+			object: 'luci.opennds', method: 'check_config', reject: true, expect: { '': {} }
+		});
 		return Promise.all([
 			uci.load('opennds'),
 			callHostHints().then(function(hosts) { return { hosts: hosts }; })
-				.catch(function() { return { hosts: {}, failed: true }; })
+				.catch(function() { return { hosts: {}, failed: true }; }),
+			callCheckConfig().then(function(result) {
+				if (result.error || !result.local_fasport) throw new Error(result.error || _('Unable to check openNDS configuration.'));
+				if (result.needs_upgrade) throw new Error(_('Upgrade the configuration file from Overview before editing gateway settings.'));
+				return result;
+			})
 		]);
 	},
 
 	render: function(data) {
 		var m, s, o;
 		var hints = data && data[1] || { hosts: {} };
+		var compatibility = data && data[2] || { major: 10, local_fasport: '0' };
 
 		m = new form.Map('opennds', _('openNDS Gateway Configuration'),
 			_('Configure network interfaces, authentication policies, FAS, rate limits, and access controls for openNDS.'));
@@ -33,6 +42,7 @@ return view.extend({
 		s = m.section(form.TypedSection, 'opennds', _('Gateway & Authentication Parameters'));
 		s.anonymous = true;
 		s.addremove = false;
+		if (compatibility.major == 11) s.filter = function(sid) { return sid === 'setup'; };
 
 		s.tab('general', _('General Settings'));
 		s.tab('auth', _('Authentication & FAS'));
@@ -110,7 +120,7 @@ return view.extend({
 		o.value('2', _('2. Username / Email Login'));
 		o.value('0', _('3. Use FAS configuration (defaults to click-to-continue if FAS disabled)'));
 		o.value('3', _('4. Custom ThemeSpec script'));
-		o.default = '0';
+		o.default = compatibility.major == 11 ? '1' : '0';
 
 		// FAS Settings (Dependencies: login_option_enabled == '0')
 		o = s.taboption('auth', form.Value, 'fasremotefqdn', _('Remote FAS FQDN (fasremotefqdn)'),
@@ -136,7 +146,8 @@ return view.extend({
 		var fasPort = o;
 		fasPort.cfgvalue = function(section_id) {
 			var port = uci.get('opennds', section_id, 'fasport');
-			return port && port !== '0' ? port : uci.get('opennds', section_id, 'luci_fasport') || port;
+			var mode = uci.get('opennds', section_id, 'login_option_enabled') || (compatibility.major == 11 ? '1' : '0');
+			return mode !== '0' ? uci.get('opennds', section_id, 'luci_fasport') || '' : port;
 		};
 
 		o = s.taboption('auth', form.Value, 'faspath', _('FAS path (faspath)'),
@@ -275,6 +286,10 @@ return view.extend({
 		o.datatype = 'port';
 		o.placeholder = '80';
 
+		var previousModes = Object.create(null);
+		uci.sections('opennds', 'opennds', function(section) {
+			previousModes[section['.name']] = section.login_option_enabled || (compatibility.major == 11 ? '1' : '0');
+		});
 		// Normalize after every option has parsed so hidden FAS fields cannot
 		// reactivate an external portal while a local login mode is selected.
 		var parse = m.parse;
@@ -282,17 +297,22 @@ return view.extend({
 			return parse.apply(this, arguments).then(function() {
 				uci.sections('opennds', 'opennds', function(section) {
 					var sid = section['.name'];
+					if (compatibility.major == 11 && sid !== 'setup') return;
 					var port = fasPort.formvalue(sid);
 					if (port == null) port = fasPort.cfgvalue(sid);
-					if ((section.login_option_enabled || '0') === '0') {
+					if ((section.login_option_enabled || (compatibility.major == 11 ? '1' : '0')) === '0') {
+						if (compatibility.major == 11 && (port == null || port === '')) port = '443';
 						if (port) uci.set('opennds', sid, 'fasport', port);
 						else uci.unset('opennds', sid, 'fasport');
 						uci.unset('opennds', sid, 'luci_fasport');
 					} else {
-						if (port && port !== '0') uci.set('opennds', sid, 'luci_fasport', port);
-						else uci.unset('opennds', sid, 'luci_fasport');
-						uci.set('opennds', sid, 'fasport', '0');
+						if (previousModes[sid] === '0') {
+							if (port && port !== '0') uci.set('opennds', sid, 'luci_fasport', port);
+							else uci.unset('opennds', sid, 'luci_fasport');
+						}
+						uci.set('opennds', sid, 'fasport', compatibility.local_fasport);
 					}
+					previousModes[sid] = section.login_option_enabled;
 				});
 			});
 		};

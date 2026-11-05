@@ -489,3 +489,30 @@ msgstr "手机端仿真视口 (可直接点击体验认证)"
 
 msgid "Footer Notice / Copyright"
 msgstr "底部版权 / 提示信息"
+
+msgid "Upgrade configuration file"
+msgstr "升级配置文件"
+
+msgid "Upgrading openNDS configuration"
+msgstr "正在升级 openNDS 配置"
+
+msgid "Backing up the configuration, applying supported changes and restarting openNDS..."
+msgstr "正在备份配置、应用支持的升级并重启 openNDS..."
+
+msgid "Configuration backup: "
+msgstr "配置备份："
+
+msgid "Configuration upgrade failed."
+msgstr "配置升级失败。"
+
+msgid "Configuration upgraded. Check daemon status and test portal authentication."
+msgstr "配置已升级。请检查网关运行状态并测试门户认证。"
+
+msgid "The configuration is incompatible with the installed openNDS version. Upgrade it to preserve existing settings and create a backup."
+msgstr "检测到配置与已安装的 openNDS 版本不兼容。升级时将备份原文件并保留现有设置。"
+
+msgid "Unable to check openNDS configuration."
+msgstr "无法检查 openNDS 配置。"
+
+msgid "Upgrade the configuration file from Overview before editing gateway settings."
+msgstr "请先在运行总览升级配置文件，再编辑网关设置。"

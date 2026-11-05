@@ -492,3 +492,30 @@ msgstr ""
 
 msgid "Footer Notice / Copyright"
 msgstr ""
+
+msgid "Upgrade configuration file"
+msgstr ""
+
+msgid "Upgrading openNDS configuration"
+msgstr ""
+
+msgid "Backing up the configuration, applying supported changes and restarting openNDS..."
+msgstr ""
+
+msgid "Configuration backup: "
+msgstr ""
+
+msgid "Configuration upgrade failed."
+msgstr ""
+
+msgid "Configuration upgraded. Check daemon status and test portal authentication."
+msgstr ""
+
+msgid "The configuration is incompatible with the installed openNDS version. Upgrade it to preserve existing settings and create a backup."
+msgstr ""
+
+msgid "Unable to check openNDS configuration."
+msgstr ""
+
+msgid "Upgrade the configuration file from Overview before editing gateway settings."
+msgstr ""

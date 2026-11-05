@@ -44,6 +44,8 @@ uci changes opennds
 
 第一条命令输出本次会使用的设备名，例如 `br-guest` 或 `br-lan`。如果输出 `br-lan`，应用后该网桥上的普通终端也需要认证。`uci changes opennds` 应没有输出；如有待提交变更，先处理这些变更，再应用示例。若 section 不存在，先检查 openNDS 的安装及初始化状态。
 
+openNDS v11 必须先在插件运行总览处理旧配置升级，确认配置段已命名为 `setup`。下面的应用命令按守护进程版本选择本地认证端口。
+
 在路由器上备份现有配置：
 
 ```sh
@@ -59,6 +61,11 @@ printf '备份目录：%s\n' "$backup_dir"
 确认备份成功后应用。下面会使用示例文案替换当前门户文案；已有文案可先在示例 JSON 中修改：
 
 ```sh
+case "$(opennds -v 2>&1)" in
+    'This is openNDS version 10.'*) local_fasport=0 ;;
+    'This is openNDS version 11.'*) local_fasport=443 ;;
+    *) printf '无法识别 openNDS 版本，停止应用配置。\n' >&2; exit 1 ;;
+esac
 gateway_interface="$(sh /tmp/opennds-initial/select-interface.sh)" &&
 printf '使用网关接口：%s\n' "$gateway_interface" &&
 mkdir -p /etc/opennds &&
@@ -67,6 +74,7 @@ cp /tmp/opennds-initial/portal_theme.json "$portal_tmp" &&
 chmod 600 "$portal_tmp" &&
 mv -f "$portal_tmp" /etc/opennds/portal_theme.json &&
 uci set "opennds.@opennds[0].gatewayinterface=$gateway_interface" &&
+uci set "opennds.@opennds[0].fasport=$local_fasport" &&
 uci batch < /tmp/opennds-initial/gateway.uci &&
 /etc/init.d/opennds restart
 ```
