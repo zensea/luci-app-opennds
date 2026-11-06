@@ -46,4 +46,5 @@ ucode_bin="$native_root/build/ucode"
 "$ucode_bin" -L "$native_root/build" "$app_dir/tests/status.uc" \
 	"$app_dir/root/usr/libexec/luci-opennds-status.uc" | tee "$output_dir/native-status.log"
 OPENNDS_JSONFILTER="$native_root/jsonpath/jsonpath" bash "$app_dir/tests/portal-shell.sh" \
-	"$app_dir/root/usr/lib/opennds/theme_luci.sh" "$fixture/status" | tee "$output_dir/native-shell.log"
+	"$app_dir/root/usr/lib/opennds/theme_luci.sh" "$fixture/status" \
+	"$app_dir/root/usr/lib/opennds/status_luci.sh" | tee "$output_dir/native-shell.log"

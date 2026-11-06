@@ -28,7 +28,7 @@ function service(content, version, fail_commit) {
 		'const uci = { cursor: function() { return native_cursor(' + sprintf('%J', directory) + ', ' + sprintf('%J', directory + '/deltas') + ', ""); } };');
 	program = replace(program, "'/etc/opennds/portal_theme.json'", sprintf('%J', directory + '/portal_theme.json'));
 	program = replace(program, "'/etc/opennds'", sprintf('%J', directory));
-	for (let path in ['/usr/lib/opennds/theme_luci.sh', '/usr/lib/opennds/theme_click-to-continue-basic.sh', '/usr/bin/jsonfilter'])
+	for (let path in ['/usr/lib/opennds/theme_luci.sh', '/usr/lib/opennds/status_luci.sh', '/usr/lib/opennds/theme_click-to-continue-basic.sh', '/usr/bin/jsonfilter'])
 		program = replace(program, "'" + path + "'", sprintf('%J', dependency));
 	if (fail_commit) program = replace(program, "!u.commit('opennds')", 'true');
 	return { directory: directory, methods: loadstring(program, { raw_mode: true })()['luci.opennds'] };
@@ -54,6 +54,7 @@ let saved = ctx.get_all('opennds', 'setup');
 assert(saved.faskey == 'fixture-device-key' && saved.future_setting == 'keep me', 'Unrelated options must survive');
 assert(saved.gatewayinterface == 'br-guest' && saved.gatewayname == 'Guest&#39;s portal', 'Gateway settings must persist safely');
 assert(saved.fasport == '443' && saved.luci_fasport == '8443' && saved.login_option_enabled == '3', 'Local FAS mode must preserve external port');
+assert(saved.statuspath == instance.directory + '/dependency', 'Saving a theme must select its branded status page');
 assert(call(instance, 'save_portal', theme).code == 0, 'Repeated saves must succeed');
 
 for (let content in ["config opennds\n", "config opennds 'other'\n", "config opennds 'setup'\nconfig opennds 'other'\n", "config opennds 'setup'\noption bad 'unterminated\n"]) {

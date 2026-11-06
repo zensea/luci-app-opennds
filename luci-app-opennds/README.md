@@ -13,7 +13,9 @@ config opennds 'setup'
 - 运行总览：每 5 秒刷新进程、网关、客户端、流量和日志；提供 auth、deauth、trust、untrust 与服务重启。客户端 trust 是运行期操作，永久名单由网关配置保存。
 - 门户设计器：七个品牌与文案字段、手机实时预览，通过随包 ThemeSpec 渲染访客页面。预览按钮仅演示交互。
 
-保存门户将认证模式设为 3，选择本插件模板，并将本地 FAS 初始化端口设为 443。切换认证模式会保留外部 FAS 端口供切回时恢复。认证令牌、放行、日志和配额仍由 openNDS 原生逻辑负责。
+保存门户将认证模式设为 3，选择本插件的认证模板与状态页，并将本地 FAS 初始化端口设为 443。认证页、成功/失败提示、已登录提示和会话状态页共用品牌配置。切换认证模式会保留外部 FAS 端口供切回时恢复。认证令牌、放行、日志和配额仍由 openNDS 原生逻辑负责。
+
+从 2.0.0-r1 更新后，在设计器中再次保存，使 statuspath 指向 /usr/lib/opennds/status_luci.sh。状态页保留当前客户端流量、会话、详细信息、刷新和原生退出登录入口；511 提示也使用同一主题。
 
 首次部署可参考[初始配置示例](examples/initial/README.md)。示例由管理员手工应用，插件安装不自动套用示例名单或文案。
 
@@ -26,6 +28,7 @@ config opennds 'setup'
 | root/usr/share/rpcd/ucode/opennds.uc | 配置检查、操作、日志及门户持久化 |
 | root/usr/libexec/luci-opennds-status.uc | 在 rpcd 外合并采集 ndsctl JSON 和元数据 |
 | root/usr/lib/opennds/theme_luci.sh | 单次 JSON 字段提取、HTML 转义和原生认证衔接 |
+| root/usr/lib/opennds/status_luci.sh | 当前客户端会话、流量状态及 511 认证提示 |
 
 插件不安装或整体覆盖 /etc/config/opennds；文件缺失或为空时仅创建命名段，设备密钥由 openNDS 管理。配置检查不会修改文件，匿名段、多 opennds 段和其他命名段会被拒绝。
 

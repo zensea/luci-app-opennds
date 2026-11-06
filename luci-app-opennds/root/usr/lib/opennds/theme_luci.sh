@@ -1,6 +1,6 @@
 #!/bin/sh
 # LuCI branding for the openNDS native click-to-continue ThemeSpec.
-# The native landing_page/auth_log functions retain token validation and quotas.
+# The native auth_log function retains token validation, logging and quotas.
 . /usr/lib/opennds/theme_click-to-continue-basic.sh
 
 portal_escape() {
@@ -48,6 +48,8 @@ big-red{display:block;color:#ef4444;font-size:17px;font-weight:bold;margin:12px 
 italic-black{display:block;color:#cbd5e1;font-size:14px;font-style:italic;margin:8px 0}
 med-blue{display:block;color:#38bdf8;font-size:15px;margin:8px 0}
 hr{border:0;border-top:1px solid #334155;margin:16px 0}
+.result{margin:28px 0}.result h2{font-size:22px}.result p{color:#94a3b8;line-height:1.6}.result-icon{font-size:40px;color:$portal_color}.result-error{color:#f87171}
+.stats{margin:20px 0;text-align:left}.stats>div{padding:12px 0;border-bottom:1px solid #334155}.stats dt{color:#94a3b8;font-size:13px}.stats dd{margin:6px 0 0;overflow-wrap:anywhere}summary{cursor:pointer;padding:16px 0;text-align:left;color:$portal_color}
 </style></head><body><main>
 <div class="logo">$portal_logo</div><h1>$portal_title</h1><p class="subtitle">$portal_subtitle</p>
 EOF
@@ -65,6 +67,44 @@ continue_form() {
 EOF
 	read_terms
 	footer
+}
+
+portal_result() {
+	if [ "$1" = "authenticated" ]; then
+		cat <<EOF
+<section class="result" role="status">
+<div class="result-icon" aria-hidden="true">✓</div>
+<h2>认证成功</h2><p>已连接互联网，现在可以正常上网。</p>
+</section>
+<form action="/" method="get"><button type="submit">查看连接状态</button></form>
+EOF
+	else
+		cat <<EOF
+<section class="result" role="alert">
+<h2 class="result-error">认证未完成</h2><p>连接可能已超时，请重新确认条款并连接。</p>
+</section>
+EOF
+		continue_form
+	fi
+	read_terms
+	footer
+}
+
+landing_page() {
+	configure_log_location
+	if [ -r "$mountpoint/ndscids/ndsinfo" ]; then
+		. "$mountpoint/ndscids/ndsinfo"
+		auth_log
+	else
+		ndsstatus=''
+	fi
+	portal_result "$ndsstatus"
+}
+
+check_authenticated() {
+	if [ "$status" = "authenticated" ]; then
+		portal_result authenticated
+	fi
 }
 
 read_terms() {

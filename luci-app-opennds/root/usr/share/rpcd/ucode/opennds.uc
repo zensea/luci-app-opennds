@@ -6,6 +6,7 @@ import * as uci from 'uci';
 
 const portal_file = '/etc/opennds/portal_theme.json';
 const portal_script = '/usr/lib/opennds/theme_luci.sh';
+const status_script = '/usr/lib/opennds/status_luci.sh';
 const bus = connect(null, 18);
 let restarting = false;
 
@@ -235,7 +236,7 @@ const methods = {
 				!match(clean.primaryColor, /^#[0-9a-fA-F]{6}$/) ||
 				!match(clean.logo, /^(wifi|coffee|hotel|business)$/) || escaped_size > 6000)
 				return { code: 1, message: 'Invalid or oversized portal theme' };
-			if (!access(portal_script, 'x') || !access('/usr/lib/opennds/theme_click-to-continue-basic.sh', 'r') || !access('/usr/bin/jsonfilter', 'x'))
+			if (!access(portal_script, 'x') || !access(status_script, 'x') || !access('/usr/lib/opennds/theme_click-to-continue-basic.sh', 'r') || !access('/usr/bin/jsonfilter', 'x'))
 				return { code: 2, message: 'Portal template or jsonfilter is not installed' };
 			let current;
 			try {
@@ -287,7 +288,8 @@ const methods = {
 					if (!u.set('opennds', section, 'gatewayname', replace(clean.title, "'", '&#39;')) ||
 						!u.set('opennds', section, 'fasport', '443') ||
 						!u.set('opennds', section, 'login_option_enabled', '3') ||
-						!u.set('opennds', section, 'themespec_path', portal_script) || !u.commit('opennds'))
+						!u.set('opennds', section, 'themespec_path', portal_script) ||
+						!u.set('opennds', section, 'statuspath', status_script) || !u.commit('opennds'))
 						die('Unable to commit opennds configuration');
 				} catch (e) {
 					request.reply({ code: 3, saved: true, applied: false, message: 'Theme saved, but gateway configuration failed: ' + e }); return;

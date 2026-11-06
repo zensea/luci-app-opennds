@@ -6,7 +6,7 @@ if [ ! -s /etc/config/opennds ]; then
 fi
 
 # OpenWrt 24.10+ reads the shipped JSON ucitrack trigger.
-chmod 0755 /usr/lib/opennds/theme_luci.sh /usr/libexec/luci-opennds-restart || exit 1
+chmod 0755 /usr/lib/opennds/theme_luci.sh /usr/lib/opennds/status_luci.sh /usr/libexec/luci-opennds-restart || exit 1
 [ ! -x /etc/init.d/ucitrack ] || /etc/init.d/ucitrack reload >/dev/null 2>&1 || exit 1
 
 # Rebuild LuCI menu & rpcd ACL cache

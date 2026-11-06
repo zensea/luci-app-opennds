@@ -255,7 +255,7 @@ test('JavaScript, backend logic and JSON parse; shell scripts pass syntax checks
 	new Function(read('htdocs/luci-static/resources/opennds.js'));
 	for (const file of ['root/usr/share/rpcd/acl.d/luci-app-opennds.json', 'root/usr/share/luci/menu.d/luci-app-opennds.json', 'root/usr/share/ucitrack/luci-app-opennds.json']) JSON.parse(read(file));
 	backend();
-	for (const file of ['root/usr/lib/opennds/theme_luci.sh', 'root/etc/uci-defaults/80_luci-app-opennds', 'root/usr/libexec/luci-opennds-restart', 'tests/run-native.sh', 'tests/portal-shell.sh']) {
+	for (const file of ['root/usr/lib/opennds/theme_luci.sh', 'root/usr/lib/opennds/status_luci.sh', 'root/etc/uci-defaults/80_luci-app-opennds', 'root/usr/libexec/luci-opennds-restart', 'tests/run-native.sh', 'tests/portal-shell.sh']) {
 		const result = spawnSync(shell, ['-n', file], { cwd: root, encoding: 'utf8' });
 		assert.equal(result.status, 0, result.stderr || String(result.error));
 	}
@@ -609,6 +609,7 @@ test('successful portal save selects the installed ThemeSpec and preserves the d
 	assert.equal(result.applied, true);
 	assert.equal(service.config.login_option_enabled, '3');
 	assert.equal(service.config.themespec_path, '/usr/lib/opennds/theme_luci.sh');
+	assert.equal(service.config.statuspath, '/usr/lib/opennds/status_luci.sh');
 	assert.equal(service.config.faskey, 'device-specific-test-key');
 	assert.deepEqual(JSON.parse(service.files.get(portalPath)), theme());
 	assert.equal(service.files.has(portalPath + '.tmp'), false);
@@ -986,7 +987,11 @@ test('get_log clamps out-of-range and invalid count parameters to the default', 
 function withTemporaryFiles(callback) {
 	const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'luci-opennds-test-'));
 	try { callback(directory); }
-	finally { for (const name of fs.readdirSync(directory)) fs.unlinkSync(path.join(directory, name)); fs.rmdirSync(directory); }
+	finally {
+		assert.equal(path.dirname(directory), path.resolve(os.tmpdir()));
+		assert.ok(path.basename(directory).startsWith('luci-opennds-test-'));
+		fs.rmSync(directory, { recursive: true, force: true });
+	}
 }
 
 const readyGatewayDevice = { up: true, ipv4: true };
@@ -1055,7 +1060,7 @@ for (const original of [null, '', "config opennds 'setup'\n\toption faskey 'keep
 			fs.chmodSync(trigger, 0o755);
 			const script = read('root/etc/uci-defaults/80_luci-app-opennds')
 				.replaceAll('/etc/config/opennds', '"$TEST_CONFIG"')
-				.replace('chmod 0755 /usr/lib/opennds/theme_luci.sh /usr/libexec/luci-opennds-restart', 'chmod 0755 "$TEST_THEME"')
+				.replace('chmod 0755 /usr/lib/opennds/theme_luci.sh /usr/lib/opennds/status_luci.sh /usr/libexec/luci-opennds-restart', 'chmod 0755 "$TEST_THEME"')
 				.replaceAll('/etc/init.d/ucitrack', '"$TEST_UCITRACK"').replace('/etc/init.d/rpcd reload', 'true');
 			const result = spawnSync(shell, [], { input: script, encoding: 'utf8',
 				env: { ...process.env, TEST_CONFIG: shellPath(config), TEST_THEME: shellPath(template), TEST_UCITRACK: shellPath(trigger), TEST_TRACE: shellPath(trace) } });
@@ -1148,14 +1153,16 @@ test('backend preserves the successful half of a status sample and keeps configu
 	}
 });
 
-test('real shell template escapes branding and tokens, and retains the native authentication callback', () => {
+test('real shell theme brands authentication results and retains the native authentication callback', () => {
 	withTemporaryFiles(directory => {
 		const native = path.join(directory, 'native.sh');
-		fs.writeFileSync(native, 'generate_splash_sequence() { continue_form; }\nlanding_page() { printf NATIVE_AUTH_CALLBACK; footer; }\n');
+		fs.mkdirSync(path.join(directory, 'ndscids'));
+		fs.writeFileSync(path.join(directory, 'ndscids/ndsinfo'), "key='native-test-key'\n");
+		fs.writeFileSync(native, 'generate_splash_sequence() { continue_form; }\nconfigure_log_location() { mountpoint="$TEST_STATE"; }\nauth_log() { printf "NATIVE_AUTH_CALLBACK:%s:%s:%s\\n" "$key" "$quotas" "$custom" >&2; ndsstatus="${TEST_AUTH_STATUS-authenticated}"; }\n');
 		const template = read('root/usr/lib/opennds/theme_luci.sh').replace('. /usr/lib/opennds/theme_click-to-continue-basic.sh', '. "$TEST_NATIVE"');
-		const env = { ...process.env, TEST_NATIVE: shellPath(native), TEST_TITLE: '<script>alert(1)</script> & "Wi-Fi"', TEST_SUBTITLE: 'literal $(echo INJECTED) and apostrophe\'', TEST_COLOR: '#123abc' };
-		const execute = entry => spawnSync(shell, [], { input: template + '\n' + jsonfilterMock + '\nfas=\'token"&<\'\nheader\n' + entry, encoding: 'utf8',
-			env: { ...env, TEST_EXPORT: portalExports({ ...theme(), title: env.TEST_TITLE, subtitle: env.TEST_SUBTITLE, primaryColor: env.TEST_COLOR, logo: 'coffee' }) } });
+		const env = { ...process.env, TEST_NATIVE: shellPath(native), TEST_STATE: shellPath(directory), TEST_TITLE: '<script>alert(1)</script> & "Wi-Fi"', TEST_SUBTITLE: 'literal $(echo INJECTED) and apostrophe\'', TEST_COLOR: '#123abc' };
+		const execute = (entry, overrides = {}) => spawnSync(shell, [], { input: template + '\n' + jsonfilterMock + '\nfas=\'token"&<\'\nquotas=\'15 100 200 300 400\'\ncustom=custom-token\nheader\n' + entry, encoding: 'utf8',
+			env: { ...env, ...overrides, TEST_EXPORT: portalExports({ ...theme(), title: env.TEST_TITLE, subtitle: env.TEST_SUBTITLE, primaryColor: env.TEST_COLOR, logo: 'coffee' }) } });
 		const result = execute('generate_splash_sequence\n');
 		assert.equal(result.status, 0, result.stderr || String(result.error));
 		assert.match(result.stdout, /&lt;script&gt;alert\(1\)&lt;\/script&gt; &amp; &quot;Wi-Fi&quot;/);
@@ -1165,7 +1172,35 @@ test('real shell template escapes branding and tokens, and retains the native au
 		assert.match(result.stdout, /background:#123abc/);
 		assert.match(result.stdout, /CAFE/);
 		assert.doesNotMatch(result.stdout, /<script>/);
-		assert.match(execute('landing_page\n').stdout, /NATIVE_AUTH_CALLBACK/);
+		const success = execute('landing_page\n');
+		assert.equal(success.status, 0, success.stderr);
+		assert.equal(success.stderr.trim(), 'NATIVE_AUTH_CALLBACK:native-test-key:15 100 200 300 400:custom-token');
+		assert.match(success.stdout, /role="status"/);
+		assert.match(success.stdout, /认证成功/);
+		assert.match(success.stdout, /查看连接状态/);
+		assert.match(success.stdout, /<form action="\/" method="get">/);
+		assert.match(success.stdout, /background:#123abc/);
+		assert.match(success.stdout, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
+		assert.doesNotMatch(success.stdout, /<script>|You are now logged in/);
+		assert.equal((success.stdout.match(/<\/html>/g) || []).length, 1);
+		for (const status of ['failed', 'busy', '']) {
+			const failure = execute('landing_page\n', { TEST_AUTH_STATUS: status });
+			assert.equal(failure.status, 0, failure.stderr);
+			assert.equal((failure.stderr.match(/NATIVE_AUTH_CALLBACK/g) || []).length, 1);
+			assert.match(failure.stdout, /role="alert"/);
+			assert.match(failure.stdout, /认证未完成/);
+			assert.match(failure.stdout, /name="fas" value="token&quot;&amp;&lt;"/);
+			assert.doesNotMatch(failure.stdout, /认证成功/);
+		}
+		const already = execute('status=authenticated\ncheck_authenticated\n');
+		assert.equal(already.status, 0, already.stderr);
+		assert.equal(already.stderr, '', 'already authenticated visits must not authenticate again');
+		assert.match(already.stdout, /认证成功/);
+		fs.unlinkSync(path.join(directory, 'ndscids/ndsinfo'));
+		const missing = execute('landing_page\n');
+		assert.equal(missing.status, 0, missing.stderr);
+		assert.equal(missing.stderr, '', 'missing gateway state must not call authentication');
+		assert.match(missing.stdout, /认证未完成/);
 	});
 });
 
