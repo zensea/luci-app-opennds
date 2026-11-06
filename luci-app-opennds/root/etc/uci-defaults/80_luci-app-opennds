@@ -1,0 +1,15 @@
+#!/bin/sh
+
+# opennds owns this file. Never replace its configuration or generated faskey.
+if [ ! -s /etc/config/opennds ]; then
+	printf "config opennds 'setup'\n" > /etc/config/opennds || exit 1
+fi
+
+# OpenWrt 24.10+ reads the shipped JSON ucitrack trigger.
+chmod 0755 /usr/lib/opennds/theme_luci.sh /usr/libexec/luci-opennds-restart || exit 1
+[ ! -x /etc/init.d/ucitrack ] || /etc/init.d/ucitrack reload >/dev/null 2>&1 || exit 1
+
+# Rebuild LuCI menu & rpcd ACL cache
+/etc/init.d/rpcd reload >/dev/null 2>&1
+
+exit 0

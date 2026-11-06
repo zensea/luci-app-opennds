@@ -1,6 +1,9 @@
 name: Build openNDS and LuCI
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       ref:
@@ -29,7 +32,7 @@ jobs:
       OUTPUT_DIR: ${{ github.workspace }}/artifacts
       SDK_ARCH: aarch64_cortex-a53-openwrt-24.10
       SDK_BRANCH: openwrt-24.10
-      APP_DIR: ${{ github.workspace }}/source/root/luci-app-opennds
+      APP_DIR: ${{ github.workspace }}/source/luci-app-opennds
 
     steps:
       - name: Checkout repository and official source
@@ -43,23 +46,23 @@ jobs:
       - name: Prepare SDK feed
         run: |
           set -euo pipefail
-          test -e source/root/opennds/.git
-          test -z "$(git -C source/root/opennds status --porcelain)"
-          test "$(git -C source/root/opennds remote get-url origin)" = https://github.com/openNDS/openNDS.git
-          upstream_sha="$(git -C source/root/opennds rev-parse HEAD)"
+          test -e source/opennds/.git
+          test -z "$(git -C source/opennds status --porcelain)"
+          test "$(git -C source/opennds remote get-url origin)" = https://github.com/openNDS/openNDS.git
+          upstream_sha="$(git -C source/opennds rev-parse HEAD)"
           [[ "$upstream_sha" =~ ^[0-9a-f]{40}$ ]]
-          gitlink_sha="$(git -C source ls-tree HEAD -- root/opennds | awk '{print $3}')"
+          gitlink_sha="$(git -C source ls-tree HEAD -- opennds | awk '{print $3}')"
           test "$gitlink_sha" = "$upstream_sha"
           mkdir -p "$OUTPUT_DIR" sdk-output feed/luci-app-opennds feed/opennds feed/.sources
           cp -R "$APP_DIR/Makefile" "$APP_DIR/LICENSE" "$APP_DIR/htdocs" "$APP_DIR/root" "$APP_DIR/po" feed/luci-app-opennds/
-          cp source/root/opennds/linux_openwrt/opennds/Makefile feed/opennds/Makefile
-          upstream_version="$(sed -n 's/^#define VERSION "\([^"]*\)"/\1/p' source/root/opennds/src/conf.h)"
+          cp source/opennds/linux_openwrt/opennds/Makefile feed/opennds/Makefile
+          upstream_version="$(sed -n 's/^#define VERSION "\([^"]*\)"/\1/p' source/opennds/src/conf.h)"
           [[ "$upstream_version" =~ ^[0-9][0-9A-Za-z.+_~-]*$ ]]
           source_file="opennds-$upstream_version-$upstream_sha.tar.gz"
-          git -C source/root/opennds archive --format=tar --prefix="opennds-$upstream_version/" HEAD \
+          git -C source/opennds archive --format=tar --prefix="opennds-$upstream_version/" HEAD \
             | gzip -n > "feed/.sources/$source_file"
           source_hash="$(sha256sum "feed/.sources/$source_file" | cut -d' ' -f1)"
-          commit_time="$(git -C source/root/opennds log -1 --format=%ct)"
+          commit_time="$(git -C source/opennds log -1 --format=%ct)"
           node - "$upstream_version" "$source_file" "$source_hash" "$commit_time" "$upstream_sha" <<'NODE'
           const fs = require('node:fs');
           const [version, filename, hash, timestamp, sha] = process.argv.slice(2);
@@ -99,54 +102,17 @@ jobs:
           } | tee "$OUTPUT_DIR/build-info.txt"
 
       - name: Run plugin regression tests
-        working-directory: source/root/luci-app-opennds
+        working-directory: source/luci-app-opennds
         run: |
           set -euo pipefail
           node --test tests/*.test.cjs 2>&1 | tee "$OUTPUT_DIR/regression.log"
 
-      - name: Run native portal and configuration tests
-        env:
-          UCODE_REVISION: 3f64c8089bf3ea4847c96b91df09fbfcaec19e1d
-          UCI_REVISION: 16ff0badbde7e17ec3bd1f827ffe45922956cf86
-          UBOX_REVISION: 49056d178f42da98048a5d4c23f83a6f6bc6dd80
+      - name: Run native portal, configuration and status tests
         run: |
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libjson-c-dev
-          native_root="$RUNNER_TEMP/opennds-ucode-native"
-          mkdir -p "$native_root/source"
-          for component in libubox uci; do
-            revision="$UBOX_REVISION"
-            if test "$component" = uci; then revision="$UCI_REVISION"; fi
-            mkdir -p "$native_root/$component"
-            curl -fL --retry 3 "https://github.com/openwrt/$component/archive/$revision.tar.gz" \
-              -o "$native_root/$component.tar.gz"
-            tar -xzf "$native_root/$component.tar.gz" -C "$native_root/$component" --strip-components=1
-            cmake -S "$native_root/$component" -B "$native_root/$component-build" \
-              -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DBUILD_LUA=OFF -DBUILD_EXAMPLES=OFF \
-              -DCMAKE_INSTALL_PREFIX="$native_root/prefix" -DCMAKE_PREFIX_PATH="$native_root/prefix"
-            cmake --build "$native_root/$component-build" --parallel 2
-            cmake --install "$native_root/$component-build"
-          done
-          curl -fL --retry 3 \
-            "https://github.com/jow-/ucode/archive/$UCODE_REVISION.tar.gz" \
-            -o "$native_root/source.tar.gz"
-          tar -xzf "$native_root/source.tar.gz" -C "$native_root/source" --strip-components=1
-          cmake -S "$native_root/source" -B "$native_root/build" \
-            -DCMAKE_PREFIX_PATH="$native_root/prefix" \
-            -DCMAKE_C_FLAGS="-Wno-error=discarded-qualifiers -I$native_root/prefix/include" \
-            -DUBUS_SUPPORT=OFF -DUCI_SUPPORT=ON -DULOOP_SUPPORT=OFF
-          cmake --build "$native_root/build" --target ucode fs_lib uci_lib --parallel 2
-          export LD_LIBRARY_PATH="$native_root/prefix/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-          test "$(id -u)" -ne 0
-          fixture="$(mktemp -d "$RUNNER_TEMP/opennds-portal.XXXXXX")"
-          "$native_root/build/ucode" -L "$native_root/build" \
-            "$APP_DIR/tests/portal-read.uc" "$APP_DIR/root/usr/share/rpcd/ucode/opennds.uc" "$fixture" \
-            2>&1 | tee "$OUTPUT_DIR/native-portal.log"
-          config_fixture="$(mktemp -d "$RUNNER_TEMP/opennds-config.XXXXXX")"
-          "$native_root/build/ucode" -L "$native_root/build" \
-            "$APP_DIR/tests/config-upgrade.uc" "$APP_DIR/root/usr/share/rpcd/ucode/opennds.uc" "$config_fixture" \
-            2>&1 | tee "$OUTPUT_DIR/native-config-upgrade.log"
+          bash "$APP_DIR/tests/run-native.sh" "$OUTPUT_DIR"
 
       - name: Build with OpenWrt SDK
         uses: openwrt/gh-action-sdk@f5813d30eeef3534b58ac7e79c5d8842b6035434
@@ -165,8 +131,8 @@ jobs:
       - name: Collect and verify packages
         run: |
           set -euo pipefail
-          test "$(git -C source/root/opennds rev-parse HEAD)" = "$OPENNDS_SOURCE_SHA"
-          test -z "$(git -C source/root/opennds status --porcelain)"
+          test "$(git -C source/opennds rev-parse HEAD)" = "$OPENNDS_SOURCE_SHA"
+          test -z "$(git -C source/opennds status --porcelain)"
           verified_packages="$RUNNER_TEMP/opennds-verified-packages"
           mkdir -p "$verified_packages"
           for name in opennds luci-app-opennds luci-i18n-opennds-zh-cn; do
@@ -205,11 +171,13 @@ jobs:
           done
           if test -f "$OUTPUT_DIR/luci-app-opennds.files.txt"; then
             package_views="$RUNNER_TEMP/opennds-package/www/luci-static/resources/view/opennds"
+            node --check "$package_views/../../opennds.js"
             for view in config overview studio; do
               node --check "$package_views/$view.js"
             done
             OPENNDS_TEST_VIEWS_DIR="$package_views" node --test "$APP_DIR/tests/regression.test.cjs" \
               2>&1 | tee "$OUTPUT_DIR/packaged-regression.log"
+            grep -qx './www/luci-static/resources/opennds.js' "$OUTPUT_DIR/luci-app-opennds.files.txt"
             grep -qx './usr/share/rpcd/ucode/opennds.uc' "$OUTPUT_DIR/luci-app-opennds.files.txt"
             grep -qx './usr/libexec/luci-opennds-status.uc' "$OUTPUT_DIR/luci-app-opennds.files.txt"
             grep -qx './usr/lib/opennds/theme_luci.sh' "$OUTPUT_DIR/luci-app-opennds.files.txt"
@@ -218,7 +186,7 @@ jobs:
               exit 1
             fi
           fi
-          python3 - "$RUNNER_TEMP/opennds-daemon" source/root/opennds <<'PY'
+          python3 - "$RUNNER_TEMP/opennds-daemon" source/opennds <<'PY'
           import os, pathlib, struct, sys
           payload = pathlib.Path(sys.argv[1])
           for filename in ('opennds', 'ndsctl'):

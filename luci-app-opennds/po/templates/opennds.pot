@@ -1,0 +1,500 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"MIME-Version: 1.0\n"
+
+msgid "openNDS Captive Portal"
+msgstr ""
+
+msgid "Overview & Clients"
+msgstr ""
+
+msgid "Gateway Settings"
+msgstr ""
+
+msgid "Portal Studio"
+msgstr ""
+
+msgid "openNDS Gateway Configuration"
+msgstr ""
+
+msgid "Configure network interfaces, authentication policies, FAS, rate limits, and access controls for openNDS."
+msgstr ""
+
+msgid "Gateway & Authentication Parameters"
+msgstr ""
+
+msgid "General Settings"
+msgstr ""
+
+msgid "Authentication & FAS"
+msgstr ""
+
+msgid "Traffic Control & Quotas"
+msgstr ""
+
+msgid "Access Control & Walled Garden"
+msgstr ""
+
+msgid "Enable openNDS daemon"
+msgstr ""
+
+msgid "Controls whether the daemon is allowed to run. Service autostart can be configured in System → Startup."
+msgstr ""
+
+msgid "Firewall reload hook (fwhook_enabled)"
+msgstr ""
+
+msgid "Re-inject openNDS rules when OpenWrt firewall (FW4/nftables) restarts. Required to prevent rule loss."
+msgstr ""
+
+msgid "Allow preemptive authentication (allow_preemptive_authentication)"
+msgstr ""
+
+msgid "Allow ndsctl to authorize connected clients that have not yet entered the preauth state."
+msgstr ""
+
+msgid "Gateway interface (gatewayinterface)"
+msgstr ""
+
+msgid "Network interface where openNDS listens and intercepts HTTP traffic (default is br-lan)."
+msgstr ""
+
+msgid "Gateway name (gatewayname)"
+msgstr ""
+
+msgid "Hotspot/venue name displayed on the portal authentication page (default is openNDS)."
+msgstr ""
+
+msgid "Name cannot contain line breaks or single quotes. Use &#39; for single quotes."
+msgstr ""
+
+msgid "Gateway web server port (gatewayport)"
+msgstr ""
+
+msgid "Port for openNDS embedded web server, default 2050 (port 80 is prohibited)."
+msgstr ""
+
+msgid "Gateway port cannot be 80."
+msgstr ""
+
+msgid "Gateway FQDN (gatewayfqdn)"
+msgstr ""
+
+msgid "Virtual domain used by clients to access the portal (default status.client)."
+msgstr ""
+
+msgid "Maximum client capacity (maxclients)"
+msgstr ""
+
+msgid "Maximum concurrent connected clients allowed before queuing new connections."
+msgstr ""
+
+msgid "Check interval (seconds)"
+msgstr ""
+
+msgid "Interval for polling client timeouts and quota consumption."
+msgstr ""
+
+msgid "Debug log level (debuglevel)"
+msgstr ""
+
+msgid "0 - Silent (errors only)"
+msgstr ""
+
+msgid "1 - Normal notices (default)"
+msgstr ""
+
+msgid "2 - Detailed status (INFO)"
+msgstr ""
+
+msgid "3 - Full trace (DEBUG)"
+msgstr ""
+
+msgid "Authentication policy (login_option_enabled)"
+msgstr ""
+
+msgid "Specify the authentication workflow: Click to Continue, User Login, FAS, or Custom ThemeSpec."
+msgstr ""
+
+msgid "1. Dynamic Click to Continue"
+msgstr ""
+
+msgid "2. Username / Email Login"
+msgstr ""
+
+msgid "4. Custom ThemeSpec script"
+msgstr ""
+
+msgid "Remote FAS FQDN (fasremotefqdn)"
+msgstr ""
+
+msgid "Fully qualified domain name of remote FAS server, without http:// or https:// prefix."
+msgstr ""
+
+msgid "Remote FAS IP (fasremoteip)"
+msgstr ""
+
+msgid "IPv4 address of remote FAS server. Defaults to gateway IP if unset."
+msgstr ""
+
+msgid "FAS port (fasport)"
+msgstr ""
+
+msgid "Port on which FAS server listens (typically 80 or 443)."
+msgstr ""
+
+msgid "FAS path (faspath)"
+msgstr ""
+
+msgid "Path from FAS web root to login script."
+msgstr ""
+
+msgid "Path must start with / and contain no spaces."
+msgstr ""
+
+msgid "FAS security level (fas_secure_enabled)"
+msgstr ""
+
+msgid "FAS protocol and token security level. Levels 3 and 4 enforce HTTPS and authmon."
+msgstr ""
+
+msgid "0 - Plaintext HTTP (insecure, testing only)"
+msgstr ""
+
+msgid "1 - Basic SHA256 hash token (HTTP)"
+msgstr ""
+
+msgid "2 - AES-256-CBC encryption (HTTP, requires php-openssl)"
+msgstr ""
+
+msgid "3 - AES-256-CBC + HTTPS + authmon (recommended for production)"
+msgstr ""
+
+msgid "4 - SHA256 hash token + HTTPS + authmon"
+msgstr ""
+
+msgid "FAS pre-shared key (faskey)"
+msgstr ""
+
+msgid "Pre-shared key between openNDS and FAS for encryption and signature validation."
+msgstr ""
+
+msgid "Key cannot contain whitespace."
+msgstr ""
+
+msgid "ThemeSpec script path (themespec_path)"
+msgstr ""
+
+msgid "Absolute path to custom ThemeSpec script (default is /usr/lib/opennds/theme_click-to-continue-basic.sh)."
+msgstr ""
+
+msgid "Session timeout (minutes)"
+msgstr ""
+
+msgid "Client session timeout before requiring re-authentication. 0 means unlimited (default 1440 min)."
+msgstr ""
+
+msgid "Authenticated idle timeout (minutes)"
+msgstr ""
+
+msgid "Idle timeout before disconnecting inactive authenticated clients (default 120 min)."
+msgstr ""
+
+msgid "Preauthenticated idle timeout (minutes)"
+msgstr ""
+
+msgid "Timeout for clients in preauth state before dropping connection (default 30 min)."
+msgstr ""
+
+msgid "Download rate limit (downloadrate - kb/s)"
+msgstr ""
+
+msgid "Client download rate limit calculated over rate check window, 0 for unlimited."
+msgstr ""
+
+msgid "Upload rate limit (uploadrate - kb/s)"
+msgstr ""
+
+msgid "Client upload rate limit calculated over rate check window, 0 for unlimited."
+msgstr ""
+
+msgid "Rate check window (ratecheckwindow)"
+msgstr ""
+
+msgid "Window multiplier for average rate calculation (duration = checkinterval * ratecheckwindow). Set 0 to disable."
+msgstr ""
+
+msgid "Download quota (downloadquota - kB)"
+msgstr ""
+
+msgid "Client download quota limit before requiring re-authentication, 0 for unlimited."
+msgstr ""
+
+msgid "Upload quota (uploadquota - kB)"
+msgstr ""
+
+msgid "Client upload quota limit before requiring re-authentication, 0 for unlimited."
+msgstr ""
+
+msgid "Trusted MAC whitelist (trustedmac)"
+msgstr ""
+
+msgid "-- Select a device --"
+msgstr ""
+
+msgid "Clients matching these MAC addresses bypass portal authentication entirely."
+msgstr ""
+
+msgid "Choose a discovered device by name, MAC or IP address, or enter a MAC address manually."
+msgstr ""
+
+msgid "Failed to read discovered devices; enter MAC addresses manually or reload the page."
+msgstr ""
+
+msgid "Walled garden FQDN list (walledgarden_fqdn_list)"
+msgstr ""
+
+msgid "Domains accessible to preauthenticated clients before logging in."
+msgstr ""
+
+msgid "Walled garden port list (walledgarden_port_list)"
+msgstr ""
+
+msgid "Allowed ports for walled garden domains (typically 443; empty allows all ports)."
+msgstr ""
+
+msgid "Blocked FQDN list (blocklist_fqdn_list)"
+msgstr ""
+
+msgid "Domains blocked even for authenticated clients."
+msgstr ""
+
+msgid "Blocked port list (blocklist_port_list)"
+msgstr ""
+
+msgid "Ports blocked for blocklist domains (empty blocks all ports)."
+msgstr ""
+
+msgid "Operation failed without a valid response."
+msgstr ""
+
+msgid "Failed to read log"
+msgstr ""
+
+msgid "openNDS Overview & Client Management"
+msgstr ""
+
+msgid "Monitor daemon status, interface parameters, and manage connected clients in real time."
+msgstr ""
+
+msgid "Daemon Status"
+msgstr ""
+
+msgid "Status unavailable"
+msgstr ""
+
+msgid "Running (Active)"
+msgstr ""
+
+msgid "Stopped"
+msgstr ""
+
+msgid "Version: "
+msgstr ""
+
+msgid "Interface: "
+msgstr ""
+
+msgid "Active Clients"
+msgstr ""
+
+msgid " authenticated"
+msgstr ""
+
+msgid "Pending (Preauth): "
+msgstr ""
+
+msgid "Gateway Info"
+msgstr ""
+
+msgid "Port: "
+msgstr ""
+
+msgid "Uptime: "
+msgstr ""
+
+msgid "Quick Actions"
+msgstr ""
+
+msgid "Restarting openNDS"
+msgstr ""
+
+msgid "Restarting openNDS to reload configuration and firewall rules..."
+msgstr ""
+
+msgid "openNDS service restarted successfully."
+msgstr ""
+
+msgid "Restart Service"
+msgstr ""
+
+msgid "Clients & Trusted List"
+msgstr ""
+
+msgid " entries"
+msgstr ""
+
+msgid "Client IP Address"
+msgstr ""
+
+msgid "MAC Address"
+msgstr ""
+
+msgid "State"
+msgstr ""
+
+msgid "Connected Time"
+msgstr ""
+
+msgid "Traffic (Download / Upload)"
+msgstr ""
+
+msgid "ndsctl Actions"
+msgstr ""
+
+msgid "No relevant logs found"
+msgstr ""
+
+msgid "Client successfully authenticated: "
+msgstr ""
+
+msgid "Client disconnected: "
+msgstr ""
+
+msgid "Client trusted: "
+msgstr ""
+
+msgid "Client untrusted: "
+msgstr ""
+
+msgid "No connected clients on managed interface"
+msgstr ""
+
+msgid "Authenticated"
+msgstr ""
+
+msgid "Trusted"
+msgstr ""
+
+msgid "Blocked"
+msgstr ""
+
+msgid "Preauthenticated"
+msgstr ""
+
+msgid " min"
+msgstr ""
+
+msgid "Trusted client (no traffic records)"
+msgstr ""
+
+msgid "Auth"
+msgstr ""
+
+msgid "Trust"
+msgstr ""
+
+msgid "Deauth"
+msgstr ""
+
+msgid "Untrust"
+msgstr ""
+
+msgid "Recent Syslog (openNDS)"
+msgstr ""
+
+msgid "openNDS Portal ThemeSpec Studio"
+msgstr ""
+
+msgid "Customize portal branding and copy with real-time preview. Saving switches openNDS to ThemeSpec mode."
+msgstr ""
+
+msgid "Branding & Content"
+msgstr ""
+
+msgid "Portal Title"
+msgstr ""
+
+msgid "Welcome Subtitle / Notice"
+msgstr ""
+
+msgid "Brand Logo Icon"
+msgstr ""
+
+msgid "Classic Wi-Fi Icon"
+msgstr ""
+
+msgid "Cafe / Restaurant (Coffee)"
+msgstr ""
+
+msgid "Hotel / Hospitality"
+msgstr ""
+
+msgid "Office / Conference (Business)"
+msgstr ""
+
+msgid "Primary Accent Color"
+msgstr ""
+
+msgid "Button Label"
+msgstr ""
+
+msgid "Terms of Service (ToS)"
+msgstr ""
+
+msgid "Title and button text cannot be empty."
+msgstr ""
+
+msgid "Generating ThemeSpec Template"
+msgstr ""
+
+msgid "Saving theme configuration, updating gateway name and restarting openNDS..."
+msgstr ""
+
+msgid "Failed to load portal configuration."
+msgstr ""
+
+msgid "Portal configuration saved and restarted. Verify daemon status in Overview."
+msgstr ""
+
+msgid "Save & Generate Portal"
+msgstr ""
+
+msgid "Cancel"
+msgstr ""
+
+msgid "Done"
+msgstr ""
+
+msgid "I have read and agree to the Terms of Service"
+msgstr ""
+
+msgid "Preview click action. Test real authentication using a client device."
+msgstr ""
+
+msgid "Mobile Viewport Simulator"
+msgstr ""
+
+msgid "Footer Notice / Copyright"
+msgstr ""
+
+msgid "Unable to check openNDS configuration."
+msgstr ""
+
+msgid "For openNDS v11, select a local authentication mode instead of setting FAS port to 0."
+msgstr ""
+
+msgid "3. External FAS server"
+msgstr ""
