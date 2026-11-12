@@ -59,7 +59,7 @@ jobs:
           upstream_version="$(sed -n 's/^#define VERSION "\([^"]*\)"/\1/p' source/opennds/src/conf.h)"
           [[ "$upstream_version" =~ ^[0-9][0-9A-Za-z.+_~-]*$ ]]
           source_file="opennds-$upstream_version-$upstream_sha.tar.gz"
-          git -C source/opennds archive --format=tar --prefix="opennds-$upstream_version/" HEAD \
+          git -c core.autocrlf=false -C source/opennds archive --format=tar --prefix="opennds-$upstream_version/" HEAD \
             | gzip -n > "feed/.sources/$source_file"
           source_hash="$(sha256sum "feed/.sources/$source_file" | cut -d' ' -f1)"
           commit_time="$(git -C source/opennds log -1 --format=%ct)"
@@ -71,7 +71,7 @@ jobs:
           if (!text.includes('PKG_VERSION:=' + version + '\n')) throw Error('Official recipe version differs from source');
           const release = text.match(/^PKG_RELEASE:=(\S+)$/m)?.[1];
           if (!release) throw Error('Missing official package release');
-          const packageRelease = release + '.git' + timestamp + '.' + sha.slice(0, 12);
+          const packageRelease = release + '.git' + timestamp + '.' + sha.slice(0, 12) + '.default0';
           const fields = { PKG_SOURCE: filename, PKG_SOURCE_URL: 'file:///feed/.sources', PKG_HASH: hash, PKG_RELEASE: packageRelease };
           for (const [key, value] of Object.entries(fields)) {
             const expression = new RegExp('^' + key + ':=.*$', 'm');
@@ -79,6 +79,12 @@ jobs:
             text = text.replace(expression, key + ':=' + value);
           }
           text = text.replace(/^(PKG_HASH:=.*)$/m, '$1\nPKG_BUILD_DIR:=$(BUILD_DIR)/opennds-$(PKG_VERSION)');
+          const config = fs.readFileSync('source/opennds/linux_openwrt/opennds/files/etc/config/opennds', 'utf8');
+          if (config.split('#option enabled 0').length !== 2) throw Error('Missing or ambiguous disabled default marker');
+          const anchor = '\t$(INSTALL_CONF) $(PKG_BUILD_DIR)/linux_openwrt/opennds/files/etc/config/opennds $(1)/etc/opennds/config.uci';
+          if (text.split(anchor).length !== 2) throw Error('Missing or ambiguous config installation rule');
+          text = text.replace(anchor, anchor +
+            '\n\t$(SED) "s/#option enabled 0/option enabled 0/" $(1)/etc/config/opennds $(1)/etc/opennds/config.uci');
           fs.writeFileSync(recipe, text);
           fs.appendFileSync(process.env.GITHUB_ENV, 'OPENNDS_PACKAGE_RELEASE=' + packageRelease + '\n');
           NODE
@@ -96,6 +102,7 @@ jobs:
             printf 'opennds_commit=%s\n' "$upstream_sha"
             printf 'opennds_version=%s\n' "$upstream_version"
             printf 'opennds_source_sha256=%s\n' "$source_hash"
+            printf 'opennds_default_enabled=0\n'
             printf 'sdk_image=ghcr.io/openwrt/sdk:%s\n' "$SDK_ARCH"
             printf 'sdk_branch=%s\n' "$SDK_BRANCH"
             printf 'sdk_action_commit=f5813d30eeef3534b58ac7e79c5d8842b6035434\n'
@@ -199,8 +206,11 @@ jobs:
           assert ('This is openNDS version ' + os.environ['OPENNDS_PACKAGE_VERSION']).encode() in binary
           config = (payload / 'etc/config/opennds').read_bytes()
           official_config = (pathlib.Path(sys.argv[2]) / 'linux_openwrt/opennds/files/etc/config/opennds').read_bytes()
-          assert config == official_config, 'Packaged configuration differs from official source'
-          print('Official daemon architecture, version and original configuration verified')
+          assert official_config.count(b'#option enabled 0') == 1, 'Official disabled default marker changed'
+          expected_config = official_config.replace(b'#option enabled 0', b'option enabled 0', 1)
+          assert config == expected_config, 'Packaged configuration must only disable the enabled default'
+          assert (payload / 'etc/opennds/config.uci').read_bytes() == expected_config, 'Packaged default copy differs'
+          print('Official daemon architecture, version and disabled default configuration verified')
           PY
           docker image inspect sdk --format '{{.Id}}' >> "$OUTPUT_DIR/build-info.txt"
           cd "$verified_packages"

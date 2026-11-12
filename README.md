@@ -22,4 +22,6 @@ git -C opennds rev-parse HEAD
 
 查看[插件使用、手工编译和验证说明](luci-app-opennds/README.md)，或进入 `opennds` 阅读官方文档。插件依赖 openNDS 本体；本体包按设备架构安装，插件与中文包为 `all` 架构。
 
+Actions 在临时打包规则中将默认配置设为 `option enabled 0`，同时更新包内的 `/etc/config/opennds` 和 `/etc/opennds/config.uci`，官方源码及归档保持不变。新安装后需在网关配置中启用 openNDS；已有设备升级时通常保留现有配置。定制包的 release 带 `.default0` 后缀，构建时校验配置只发生这一处预期变化。
+
 本仓库维护的插件代码使用 [Apache-2.0](LICENSE)，官方源码保留其自身许可证与版权说明。

@@ -48,6 +48,9 @@ function fixture(directory, oldPointer = false) {
 	fs.mkdirSync(path.join(official, 'linux_openwrt/opennds'), { recursive: true });
 	fs.writeFileSync(path.join(official, 'src/conf.h'), '#define VERSION "11.0.0"\n');
 	fs.copyFileSync(path.join(repository, 'opennds/linux_openwrt/opennds/Makefile'), path.join(official, 'linux_openwrt/opennds/Makefile'));
+	fs.mkdirSync(path.join(official, 'linux_openwrt/opennds/files/etc/config'), { recursive: true });
+	fs.writeFileSync(path.join(official, 'linux_openwrt/opennds/files/etc/config/opennds'),
+		read('opennds/linux_openwrt/opennds/files/etc/config/opennds').replace(/\r\n/g, '\n'));
 	git(official, 'init', '-b', 'master');
 	git(official, 'add', '.');
 	git(official, 'commit', '-m', 'Original release');
@@ -123,7 +126,7 @@ test('release synchronization rejects prereleases, invalid tags and invalid SHA 
 	}
 }));
 
-test('SDK preparation archives the exact submodule HEAD and edits only a temporary recipe', () => temporary(directory => {
+test('SDK preparation preserves official source and disables only the packaged default configuration', () => temporary(directory => {
 	const instance = fixture(directory);
 	git(instance.child, 'remote', 'set-url', 'origin', 'https://github.com/openNDS/openNDS.git');
 	const originalRecipe = fs.readFileSync(path.join(instance.child, 'linux_openwrt/opennds/Makefile'), 'utf8');
@@ -146,4 +149,23 @@ test('SDK preparation archives the exact submodule HEAD and edits only a tempora
 	assert.equal(git(instance.child, 'status', '--porcelain'), '');
 	assert.match(fs.readFileSync(environment, 'utf8'), new RegExp('OPENNDS_SOURCE_SHA=' + instance.next));
 	assert.equal(fs.existsSync(path.join(directory, 'feed/opennds/patches')), false);
+	const configPath = 'linux_openwrt/opennds/files/etc/config/opennds';
+	const originalConfig = fs.readFileSync(path.join(instance.child, configPath));
+	const archivedConfig = spawnSync('tar', ['-xzOf', path.join(directory, 'feed/.sources', archiveName), 'opennds-11.0.0/' + configPath]);
+	assert.equal(archivedConfig.status, 0, String(archivedConfig.stderr));
+	assert.ok(archivedConfig.stdout.equals(originalConfig), 'Source archive must retain the official configuration');
+	const staged = path.join(directory, 'package-root');
+	for (const name of ['config', 'opennds']) fs.mkdirSync(path.join(staged, 'etc', name), { recursive: true });
+	const quote = value => "'" + value.replace(/\\/g, '/').replaceAll("'", "'\"'\"'") + "'";
+	const commands = recipe.split(/\r?\n/).filter(line => /^\t\$\((INSTALL_CONF|SED)\)/.test(line));
+	assert.equal(commands.length, 3, 'Two configuration copies must be followed by the default override');
+	const install = commands.map(line => line.replaceAll('$(PKG_BUILD_DIR)', quote(instance.child))
+		.replaceAll('$(1)', quote(staged)).replace('$(INSTALL_CONF)', 'cp').replace('$(SED)', 'sed -i -e')).join('\n');
+	const installed = spawnSync(shell, ['-e', '-s'], { cwd: directory, input: install + '\n', encoding: 'utf8' });
+	assert.equal(installed.status, 0, installed.stderr || installed.error?.message);
+	const expected = Buffer.from(originalConfig.toString('utf8').replace('#option enabled 0', 'option enabled 0'));
+	for (const name of ['etc/config/opennds', 'etc/opennds/config.uci'])
+		assert.ok(fs.readFileSync(path.join(staged, name)).equals(expected), 'Only the enabled default may change: ' + name);
+	assert.ok(fs.readFileSync(path.join(instance.child, configPath)).equals(originalConfig), 'Installation must not modify the official configuration');
+	assert.match(fs.readFileSync(environment, 'utf8'), /OPENNDS_PACKAGE_RELEASE=.*\.default0\n/);
 }));
