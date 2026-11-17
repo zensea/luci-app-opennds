@@ -7,6 +7,9 @@ luci_opennds_check_reauth() {
 	case "${action:-}" in auth_client|auth) ;; *) return 0 ;; esac
 	interval=$(/usr/lib/opennds/libopennds.sh get_option_from_config reauth_interval 2>/dev/null)
 	case "$interval" in ''|0) return 0 ;; *[!0-9]*) exitlevel=1; return 0 ;; esac
+	# Shell arithmetic treats leading zeros as octal; use decimal digits instead.
+	interval=${interval#"${interval%%[!0]*}"}
+	[ -n "$interval" ] || return 0
 	if [ "${#interval}" -gt 10 ] || [ "$interval" -gt 4294967295 ]; then
 		exitlevel=1
 		return 0

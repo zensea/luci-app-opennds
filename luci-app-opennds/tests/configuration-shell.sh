@@ -52,6 +52,35 @@ LOG
 		grep -qx '0 0 0 0 0' "$fixture/result"
 	done
 done
+while read -r interval clock expected; do
+	printf '%s' "$interval" > "$fixture/interval"
+	printf '%s' "$clock" > "$fixture/clock"
+	printf 'method="client_deauth", clientmac="02:00:00:00:00:01", timestamp=900\n' > "$fixture/log/ndslog/binauthlog.log"
+	result=0
+	sh "$fixture/binauth.sh" auth_client '02:00:00:00:00:01' url agent '192.0.2.10' token custom > "$fixture/result" 2> "$fixture/error" || result=$?
+	if [ "$result" -ne "$expected" ] || [ -s "$fixture/error" ]; then
+		printf 'Decimal interval %s at %s: expected exit %s, got %s\n' "$interval" "$clock" "$expected" "$result" >&2
+		cat "$fixture/error" >&2
+		exit 1
+	fi
+	grep -qx '0 0 0 0 0' "$fixture/result"
+done <<'DECIMAL_CASES'
+08 907 1
+08 908 0
+09 908 1
+09 909 0
+010 908 1
+010 909 1
+010 910 0
+010 911 0
+0000000000000000000008 907 1
+0000000000000000000008 908 0
+000 900 0
+0000000000000000000000 900 0
+0004294967295 4294968194 1
+0004294967295 4294968195 0
+0004294967296 900 1
+DECIMAL_CASES
 for interval in '' 0 600 bad 999999999999999999999; do
 	printf '%s' "$interval" > "$fixture/interval"
 	printf '1000' > "$fixture/clock"

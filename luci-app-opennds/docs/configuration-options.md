@@ -1,6 +1,6 @@
 # 配置入口与验证说明
 
-日期：2026-11-17。适用：openNDS v11、OpenWrt 24.10、luci-app-opennds 2.0.0-r3。
+日期：2026-11-17。适用：openNDS v11、OpenWrt 24.10、luci-app-opennds 2.0.0-r4。
 
 ## 1. 交付范围
 
@@ -24,7 +24,7 @@
 | 编号 | 配置项 | 选项卡 | 单位、默认值与约束 |
 | --- | --- | --- | --- |
 | C01 | enable_serial_number_suffix | 常规 | 继承默认启用，或显式启用/停用；更改会影响 FAS 网关名称标识 |
-| C02 | reauth_interval | 认证 | 秒，0 或未配置不限制，最大 4294967295；由插件钩子检查 |
+| C02 | reauth_interval | 认证 | 十进制秒数，允许前导零；0 或未配置不限制，最大 4294967295；由插件钩子检查 |
 | C03 | nat_traversal_poll_interval | 认证 | 1–59 秒，默认 5；仅外部 FAS 等级 3/4 显示 |
 | C04 | fup_upload_throttle_rate | 流量 | kbit/s，关联上传配额；0 或未配置按原生逻辑取消认证 |
 | C05 | fup_download_throttle_rate | 流量 | kbit/s，关联下载配额；0 或未配置按原生逻辑取消认证 |
