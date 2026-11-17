@@ -4,6 +4,7 @@ set -euo pipefail
 template=$1
 fixture=$2
 status_template=$3
+status_shell=${OPENNDS_STATUS_SHELL:-bash}
 export LD_LIBRARY_PATH
 "${OPENNDS_JSONFILTER:?}" -h >/dev/null
 printf '%s\n' '{"title":"Bill\u0027s <Wi-Fi> & `literal` $(literal)","subtitle":"Welcome","logo":"coffee","primaryColor":"#123abc","btnText":"Connect","terms":"Line 1\nLine 2 & privacy","footer":"Guest"}' > "$fixture/portal.json"
@@ -59,7 +60,7 @@ cat "$TEST_CLIENT_JSON"
 EOF
 chmod +x "$fixture/bin/ndsctl"
 printf '%s\n' '{"ip":"192.0.2.10","mac":"02:00:00:00:00:01","state":"Authenticated","client_type":"cpd_can","clientif":"<img src=x onerror=alert(1)>","session_start":"1793664000","session_end":"null","last_active":"1793664100","download_this_session":"4096","upload_this_session":"512","download_session_avg":"100.00","upload_session_avg":"20.00","download_quota":"null","upload_quota":"10000","token":"private-token","faskey":"private-key"}' > "$TEST_CLIENT_JSON"
-PATH="$fixture/bin:$PATH" bash "$fixture/status.sh" status 192.0.2.10 > "$fixture/status.html"
+PATH="$fixture/bin:$PATH" "$status_shell" "$fixture/status.sh" status 192.0.2.10 > "$fixture/status.html"
 test "$(cat "$TEST_STATUS_TRACE")" = 'json 192.0.2.10'
 grep -Fq '连接状态' "$fixture/status.html"
 grep -Fq '4096 kB' "$fixture/status.html"
@@ -70,21 +71,31 @@ grep -Fq '<details><summary>更多连接信息</summary>' "$fixture/status.html"
 grep -Fq 'action="/opennds_deny/"' "$fixture/status.html"
 grep -Fq 'background:#123abc' "$fixture/status.html"
 ! grep -Eq 'private-token|private-key|<img src=x' "$fixture/status.html"
-PATH="$fixture/bin:$PATH" bash "$fixture/status.sh" err511 192.0.2.10 > "$fixture/err511.html"
+PATH="$fixture/bin:$PATH" "$status_shell" "$fixture/status.sh" err511 192.0.2.10 > "$fixture/err511.html"
 grep -Fq '需要认证' "$fixture/err511.html"
 grep -Fq 'action="/login"' "$fixture/err511.html"
 test "$(wc -l < "$TEST_STATUS_TRACE")" -eq 1
+# Physical data lines must not become row markers, even with tabs or CRLF.
+printf '%s\n' '{"ip":"192.0.2.10","client_type":"L\nV\t中文 &<>\"\u0027`\nE\n\n","clientif":"<img src=x onerror=alert(1)>\r\n\t接口\n"}' > "$TEST_CLIENT_JSON"
+PATH="$fixture/bin:$PATH" "$status_shell" "$fixture/status.sh" status 192.0.2.10 > "$fixture/status-multiline.html"
+test "$(grep -c '^<div><dt>' "$fixture/status-multiline.html")" -eq 20
+printf '<div><dt>客户端类型</dt><dd>L\nV\t中文 &amp;&lt;&gt;&quot;&#39;&#96;\nE</dd></div>\n' > "$fixture/expected-type.html"
+sed -n '/^<div><dt>客户端类型/,/^E<\/dd><\/div>$/p' "$fixture/status-multiline.html" > "$fixture/actual-type.html"
+cmp "$fixture/expected-type.html" "$fixture/actual-type.html"
+printf '<div><dt>连接接口</dt><dd>&lt;img src=x onerror=alert(1)&gt;\r\n\t接口</dd></div>\n' > "$fixture/expected-interface.html"
+sed -n '/^<div><dt>连接接口/,/接口<\/dd><\/div>$/p' "$fixture/status-multiline.html" > "$fixture/actual-interface.html"
+cmp "$fixture/expected-interface.html" "$fixture/actual-interface.html"
 printf '{}\n' > "$TEST_CLIENT_JSON"
-PATH="$fixture/bin:$PATH" bash "$fixture/status.sh" status 192.0.2.10 > "$fixture/status-unavailable.html"
+PATH="$fixture/bin:$PATH" "$status_shell" "$fixture/status.sh" status 192.0.2.10 > "$fixture/status-unavailable.html"
 grep -Fq '暂时无法读取连接状态' "$fixture/status-unavailable.html"
 ! grep -Fq '4096 kB' "$fixture/status-unavailable.html"
 for sample in 'invalid JSON' '{"ip":"192.0.2.11","download_this_session":"9999"}'; do
 	printf '%s\n' "$sample" > "$TEST_CLIENT_JSON"
-	PATH="$fixture/bin:$PATH" bash "$fixture/status.sh" status 192.0.2.10 > "$fixture/status-invalid.html"
+	PATH="$fixture/bin:$PATH" "$status_shell" "$fixture/status.sh" status 192.0.2.10 > "$fixture/status-invalid.html"
 	grep -Fq '暂时无法读取连接状态' "$fixture/status-invalid.html"
 	! grep -Fq '9999 kB' "$fixture/status-invalid.html"
 done
-PATH="$fixture/bin:$PATH" TEST_NDSCTL_FAILURE=1 bash "$fixture/status.sh" status 192.0.2.10 > "$fixture/status-busy.html"
+PATH="$fixture/bin:$PATH" TEST_NDSCTL_FAILURE=1 "$status_shell" "$fixture/status.sh" status 192.0.2.10 > "$fixture/status-busy.html"
 grep -Fq '暂时无法读取连接状态' "$fixture/status-busy.html"
 printf '{}\n' > "$fixture/portal.json"
 PATH="$fixture/bin:$PATH" portal_title=stale bash -c '. "$1"; header; continue_form' sh "$fixture/theme.sh" > "$fixture/empty.html"

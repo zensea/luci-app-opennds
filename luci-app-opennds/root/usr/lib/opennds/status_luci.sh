@@ -2,14 +2,36 @@
 # Read only this client's native counters; logout remains an openNDS HTTP action.
 . /usr/lib/opennds/theme_luci.sh
 
+portal_newline='
+'
 portal_row() {
 	case "$2" in
 		''|Unavailable) portal_value='—' ;;
 		null|Unlimited) portal_value='无限制' ;;
 		*) portal_value="$2$3" ;;
 	esac
-	portal_value=$(printf '%s' "$portal_value" | portal_escape)
-	printf '<div><dt>%s</dt><dd>%s</dd></div>\n' "$1" "$portal_value"
+	# Match command substitution's removal of trailing newlines in the old renderer.
+	while [ "${portal_value%"$portal_newline"}" != "$portal_value" ]; do
+		portal_value=${portal_value%"$portal_newline"}
+	done
+	printf 'L%s\n' "$1"
+	# Prefix every physical data line so values cannot impersonate record markers.
+	while :; do
+		case "$portal_value" in
+			*"$portal_newline"*)
+				printf 'V%s\n' "${portal_value%%"$portal_newline"*}"
+				portal_value=${portal_value#*"$portal_newline"} ;;
+			*) printf 'V%s\nE\n' "$portal_value"; break ;;
+		esac
+	done
+}
+
+render_stats_rows() {
+	# Escape data before adding markup; hold one complete row, including newlines.
+	sed -n -e 's/\&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' \
+		-e 's/"/\&quot;/g' -e "s/'/\&#39;/g" -e 's/`/\&#96;/g' \
+		-e '/^L/{s/^L//;h;d;}' -e '/^V/{s/^V//;H;d;}' \
+		-e '/^E$/{g;s/\n/<\/dt><dd>/;s/^/<div><dt>/;s/$/<\/dd><\/div>/;p;}'
 }
 
 portal_time() {
@@ -57,6 +79,7 @@ EOF
 fi
 
 printf '<section class="result"><h2>连接状态</h2></section><dl class="stats">\n'
+{
 portal_row 'IP 地址' "$client_ip"
 portal_row 'MAC 地址' "$client_mac"
 portal_row '会话开始' "$(portal_time "$client_session_start")"
@@ -65,7 +88,9 @@ portal_row '本次下载' "$client_download_this_session" ' kB'
 portal_row '本次上传' "$client_upload_this_session" ' kB'
 portal_row '平均下载速率' "$client_download_session_avg" ' kb/s'
 portal_row '平均上传速率' "$client_upload_session_avg" ' kb/s'
+} | render_stats_rows
 printf '</dl><details><summary>更多连接信息</summary><dl class="stats">\n'
+{
 portal_row '认证状态' "$client_state"
 portal_row '客户端类型' "$client_client_type"
 portal_row '连接接口' "$client_clientif"
@@ -78,6 +103,7 @@ portal_row '下载包速率' "$client_download_packet_rate" ' packets/min'
 portal_row '上传包速率' "$client_upload_packet_rate" ' packets/min'
 portal_row '下载桶容量' "$client_download_bucket_size" ' packets'
 portal_row '上传桶容量' "$client_upload_bucket_size" ' packets'
+} | render_stats_rows
 cat <<EOF
 </dl></details>
 <form action="/" method="get"><button type="submit">刷新状态</button></form>

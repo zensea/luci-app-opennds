@@ -1338,6 +1338,54 @@ test('real shell theme brands authentication results and retains the native auth
 	});
 });
 
+test('status shell preserves row boundaries, escaping, defaults and early exits', () => {
+	const client = {
+		ip: '192.0.2.10', mac: '02:00:00:00:00:01', state: 'Authenticated',
+		client_type: 'L\nV\t中文 &<>"\'`\nE\n\n', clientif: '<img src=x onerror=alert(1)>\n\t接口\n',
+		session_start: '0', session_end: 'null', last_active: '',
+		download_this_session: '4096', upload_this_session: '512',
+		download_session_avg: '100.00', upload_session_avg: '20.00',
+		download_quota: 'Unlimited', upload_quota: 'Unavailable',
+		download_rate_limit_threshold: '0', upload_rate_limit_threshold: '',
+		download_packet_rate: 'null', upload_packet_rate: '7', download_bucket_size: '8', upload_bucket_size: '9'
+	};
+	const exports = values => Object.entries(values).map(([key, value]) =>
+		'client_' + key + "='" + value.replaceAll("'", "'\"'\"'") + "'").join('\n');
+	const template = read('root/usr/lib/opennds/theme_luci.sh').replace('. /usr/lib/opennds/theme_click-to-continue-basic.sh', ':');
+	const status = read('root/usr/lib/opennds/status_luci.sh').replace('. /usr/lib/opennds/theme_luci.sh', ':');
+	const run = (mode, values = client) => spawnSync(shell, [], {
+		input: template + '\njsonfilter() { if [ "$1" = -i ]; then printf "%s\\n" "$TEST_PORTAL"; else printf "%s\\n" "$TEST_CLIENT"; fi; }\n' +
+			'timeout() { :; }\nsed() { printf "SED_CALL\\n" >&2; command sed "$@"; }\nset -- ' + mode + ' 192.0.2.10\n' + status,
+		encoding: 'utf8', env: { ...process.env, TEST_PORTAL: portalExports(theme()), TEST_CLIENT: exports(values) }
+	});
+	const escape = value => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+		.replaceAll('"', '&quot;').replaceAll("'", '&#39;').replaceAll('`', '&#96;').replace(/\n+$/, '');
+	const row = (label, value) => '<div><dt>' + label + '</dt><dd>' + escape(value) + '</dd></div>\n';
+	const expected = [
+		['IP 地址', client.ip], ['MAC 地址', client.mac], ['会话开始', '—'], ['会话结束', '无限制'],
+		['本次下载', '4096 kB'], ['本次上传', '512 kB'], ['平均下载速率', '100.00 kb/s'], ['平均上传速率', '20.00 kb/s'],
+		['认证状态', client.state], ['客户端类型', client.client_type], ['连接接口', client.clientif], ['最后活动', '—'],
+		['下载配额', '无限制'], ['上传配额', '—'], ['下载速率阈值', '0 kb/s'], ['上传速率阈值', '—'],
+		['下载包速率', '无限制'], ['上传包速率', '7 packets/min'], ['下载桶容量', '8 packets'], ['上传桶容量', '9 packets']
+	];
+	const result = run('status');
+	assert.equal(result.status, 0, result.stderr);
+	assert.equal((result.stderr.match(/SED_CALL/g) || []).length, 7, 'Five header escapes and two statistics streams');
+	const stats = '<dl class="stats">\n' + expected.slice(0, 8).map(args => row(...args)).join('') +
+		'</dl><details><summary>更多连接信息</summary><dl class="stats">\n' + expected.slice(8).map(args => row(...args)).join('') + '</dl></details>';
+	assert.ok(result.stdout.includes(stats), result.stdout);
+	assert.equal((result.stdout.match(/<div><dt>/g) || []).length, 20);
+	assert.match(result.stdout, /action="\/opennds_deny\/"/);
+	assert.doesNotMatch(result.stdout, /<img src=x/);
+	for (const [mode, values, message] of [['err511', client, '需要认证'], ['status', {}, '暂时无法读取连接状态'], ['status', { ip: '192.0.2.11' }, '暂时无法读取连接状态']]) {
+		const early = run(mode, values);
+		assert.equal(early.status, 0, early.stderr);
+		assert.ok(early.stdout.includes(message));
+		assert.doesNotMatch(early.stdout, /<div><dt>/);
+		assert.equal((early.stderr.match(/SED_CALL/g) || []).length, 5);
+	}
+});
+
 test('accepted escape-heavy portal renders a complete page within the configured size', () => {
 	const config = { ...theme(), title: '`'.repeat(100), terms: '`'.repeat(700) };
 	assert.equal(backend().methods.save_portal.call({ args: { config } }).code, 0);

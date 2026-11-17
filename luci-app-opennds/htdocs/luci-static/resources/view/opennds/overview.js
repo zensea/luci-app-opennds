@@ -41,6 +41,10 @@ function cell(row, content, style, className) {
 	return node;
 }
 
+function megabytes(kb) {
+	return (Math.max(0, Number(kb) || 0) / 1024).toFixed(1);
+}
+
 return view.extend({
 	load: function() { return nds.loadOverview(); },
 
@@ -154,7 +158,6 @@ return view.extend({
 				}, [badge[0]]));
 				var duration = client.session_start > 0 ? Math.max(0, Math.floor((Date.now() / 1000 - client.session_start) / 60)) : 0;
 				cell(row, state === 'Trusted' ? '-' : duration + _(' min'));
-				function megabytes(kb) { return (Math.max(0, Number(kb) || 0) / 1024).toFixed(1); }
 				cell(row, state === 'Trusted' ? _('Trusted client (no traffic records)') :
 					'↓ ' + megabytes(client.download_this_session) + ' MB / ↑ ' + megabytes(client.upload_this_session) + ' MB');
 				var controls = cell(row, '', 'white-space: nowrap;', 'center');

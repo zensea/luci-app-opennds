@@ -364,22 +364,16 @@ return view.extend({
 			_('Rules follow native ordering. Defining entries replaces the native default allow-all policy; include the required allow rules.'), ruleValid);
 		listOption('access', 'users_to_router', _('Rules for access to the router'),
 			_('Example: allow tcp port 8080. Native DNS, DHCP, SSH and HTTPS management rules remain included. These entries do not override a firewall passthrough configuration.'), ruleValid);
-		o = s.taboption('access', form.DynamicList, 'walledgarden_fqdn_list', _('Walled garden FQDN list (walledgarden_fqdn_list)'),
-			_('Domains accessible to preauthenticated clients before logging in.'));
-		o.datatype = 'host(0)';
-		o.placeholder = 'captive.apple.com';
-		o = s.taboption('access', form.DynamicList, 'walledgarden_port_list', _('Walled garden port list (walledgarden_port_list)'),
-			_('Allowed ports for walled garden domains (typically 443; empty allows all ports).'));
-		o.datatype = 'port';
-		o.placeholder = '443';
-		o = s.taboption('access', form.DynamicList, 'blocklist_fqdn_list', _('Blocked FQDN list (blocklist_fqdn_list)'),
-			_('Domains blocked even for authenticated clients.'));
-		o.datatype = 'host(0)';
-		o.placeholder = 'unwanted-domain.com';
-		o = s.taboption('access', form.DynamicList, 'blocklist_port_list', _('Blocked port list (blocklist_port_list)'),
-			_('Ports blocked for blocklist domains (empty blocks all ports).'));
-		o.datatype = 'port';
-		o.placeholder = '80';
+		[
+			['walledgarden_fqdn_list', _('Walled garden FQDN list (walledgarden_fqdn_list)'), _('Domains accessible to preauthenticated clients before logging in.'), 'host(0)', 'captive.apple.com'],
+			['walledgarden_port_list', _('Walled garden port list (walledgarden_port_list)'), _('Allowed ports for walled garden domains (typically 443; empty allows all ports).'), 'port', '443'],
+			['blocklist_fqdn_list', _('Blocked FQDN list (blocklist_fqdn_list)'), _('Domains blocked even for authenticated clients.'), 'host(0)', 'unwanted-domain.com'],
+			['blocklist_port_list', _('Blocked port list (blocklist_port_list)'), _('Ports blocked for blocklist domains (empty blocks all ports).'), 'port', '80']
+		].forEach(function(field) {
+			var option = s.taboption('access', form.DynamicList, field[0], field[1], field[2]);
+			option.datatype = field[3];
+			option.placeholder = field[4];
+		});
 
 		// Portal and resources share the same UCI section as authentication.
 		o = pathOption('portal', 'themespec_path', _('ThemeSpec script path (themespec_path)'),
