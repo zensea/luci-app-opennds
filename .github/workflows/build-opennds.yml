@@ -95,7 +95,8 @@ jobs:
             feed/luci-app-opennds/root/etc/uci-defaults/80_luci-app-opennds \
             feed/luci-app-opennds/root/usr/libexec/luci-opennds-restart \
             feed/luci-app-opennds/root/usr/lib/opennds/theme_luci.sh \
-            feed/luci-app-opennds/root/usr/lib/opennds/status_luci.sh
+            feed/luci-app-opennds/root/usr/lib/opennds/status_luci.sh \
+            feed/luci-app-opennds/root/usr/check_reauth_interval.sh
           {
             printf 'plugin_repository=%s\n' "$GITHUB_REPOSITORY"
             printf 'repository_commit=%s\n' "$(git -C source rev-parse HEAD)"
@@ -190,6 +191,7 @@ jobs:
             grep -qx './usr/libexec/luci-opennds-status.uc' "$OUTPUT_DIR/luci-app-opennds.files.txt"
             grep -qx './usr/lib/opennds/theme_luci.sh' "$OUTPUT_DIR/luci-app-opennds.files.txt"
             grep -qx './usr/lib/opennds/status_luci.sh' "$OUTPUT_DIR/luci-app-opennds.files.txt"
+            grep -qx './usr/check_reauth_interval.sh' "$OUTPUT_DIR/luci-app-opennds.files.txt"
             if grep -qx './etc/config/opennds' "$OUTPUT_DIR/luci-app-opennds.files.txt"; then
               printf 'Unexpected daemon configuration in plugin package\n' >&2
               exit 1

@@ -495,3 +495,153 @@ msgstr "无法检查 openNDS 配置。"
 
 msgid "For openNDS v11, select a local authentication mode instead of setting FAS port to 0."
 msgstr "openNDS v11 请直接选择本地认证模式，不要将 FAS 端口设为 0。"
+
+msgid "Portal & Resources"
+msgstr "门户与资源"
+
+msgid "Advanced & Logging"
+msgstr "高级与日志"
+
+msgid "Enter an integer in the allowed range."
+msgstr "请输入允许范围内的整数。"
+
+msgid "Enter an absolute path without spaces or shell characters."
+msgstr "请输入不含空格或 Shell 特殊字符的绝对路径。"
+
+msgid "One entry per line. Order is preserved; an empty field removes the custom list."
+msgstr "每行一条，保留输入顺序；留空删除自定义列表。"
+
+msgid "Invalid entry at line"
+msgstr "条目无效，行号"
+
+msgid "Inherit default (enabled)"
+msgstr "继承默认值（启用）"
+
+msgid "Enabled"
+msgstr "启用"
+
+msgid "Disabled"
+msgstr "停用"
+
+msgid "Append device serial number"
+msgstr "附加设备序列号"
+
+msgid "Append a MAC-derived suffix to the gateway name. Empty inherits enabled. Changing it also changes the FAS gateway identifier."
+msgstr "在网关名称后附加由 MAC 派生的序列号。留空默认启用，更改后也会改变 FAS 网关标识。"
+
+msgid "Minimum reauthentication interval (seconds)"
+msgstr "重新认证最短间隔（秒）"
+
+msgid "Wait after deauthentication before accepting another login. Empty or 0 disables the delay. Requires the plugin BinAuth hook."
+msgstr "设备取消认证后，再次登录需要等待的时间。留空或 0 不限制；由插件 BinAuth 补充脚本执行。"
+
+msgid "Authmon polling interval (seconds)"
+msgstr "Authmon 轮询间隔（秒）"
+
+msgid "Native Authmon accepts 1–59 seconds. Empty uses 5 seconds; 60 falls back to 5 in this version."
+msgstr "当前原生 Authmon 接受 1–59 秒。留空使用 5 秒；设置为 60 会回退到 5 秒。"
+
+msgid "Upload speed after quota (kbit/s)"
+msgstr "达到配额后的上传速率（kbit/s）"
+
+msgid "Download speed after quota (kbit/s)"
+msgstr "达到配额后的下载速率（kbit/s）"
+
+msgid "After the matching quota is reached, use this speed. Empty or 0 uses native deauthentication instead of throttling."
+msgstr "达到对应流量配额后使用此速率。留空或 0 按原生逻辑取消认证，不进行降速。"
+
+msgid "Preemptively authenticated devices"
+msgstr "自动预认证设备"
+
+msgid "Use mac=AA:BB:CC:DD:EE:FF;sessiontimeout=60;uploadrate=100;downloadrate=1000;uploadquota=0;downloadquota=0;custom=device. Unlike trusted MACs, these devices retain counters, quotas and timeouts. Empty or 0 quota parameters inherit global values. Custom data accepts letters, digits and _ . : @ + / -."
+msgstr "格式：mac=AA:BB:CC:DD:EE:FF;sessiontimeout=60;uploadrate=100;downloadrate=1000;uploadquota=0;downloadquota=0;custom=device。与信任 MAC 不同，仍记录流量并执行配额及超时。额度参数留空或 0 继承全局设置；custom 仅允许字母、数字和 _ . : @ + / -。"
+
+msgid "Rules before authentication"
+msgstr "认证前访问规则"
+
+msgid "Example: allow tcp port 443 to 192.0.2.10 or block all to 192.0.2.0/24. Specify all, or tcp/udp with a port; native v11 misinterprets omitted protocols. Addresses may be IPv4, subnets or single-address hostnames."
+msgstr "示例：allow tcp port 443 to 192.0.2.10 或 block all to 192.0.2.0/24。请明确填写 all，或带端口的 tcp/udp；当前原生版本会误解省略协议的写法。地址支持 IPv4、子网或仅解析到一个地址的域名。"
+
+msgid "Rules after authentication"
+msgstr "认证后访问规则"
+
+msgid "Rules follow native ordering. Defining entries replaces the native default allow-all policy; include the required allow rules."
+msgstr "生效顺序遵循原生规则处理。填写自定义规则将替换默认的全部允许策略，请包含所需的允许规则。"
+
+msgid "Rules for access to the router"
+msgstr "访问路由器规则"
+
+msgid "Example: allow tcp port 8080. Native DNS, DHCP, SSH and HTTPS management rules remain included. These entries do not override a firewall passthrough configuration."
+msgstr "示例：allow tcp port 8080。原生仍保留 DNS、DHCP、SSH 和 HTTPS 管理访问规则；此列表不覆盖系统防火墙接管配置。"
+
+msgid "Status and error page script"
+msgstr "状态页与错误页脚本"
+
+msgid "Empty uses the native status page. Explicit paths survive saving Portal Studio branding. The script must exist and be executable on the router."
+msgstr "留空使用原生状态页。显式设置的路径会在保存门户设计后保留；脚本需在路由器上存在且可执行。"
+
+msgid "Native status page"
+msgstr "原生状态页"
+
+msgid "Plugin branded status page"
+msgstr "插件品牌状态页"
+
+msgid "Maximum portal page size (bytes)"
+msgstr "门户页面大小上限（字节）"
+
+msgid "Minimum 1024 bytes. Empty uses 10240. Larger pages consume more router memory; Portal Studio still checks its content against this limit."
+msgstr "最小 1024 字节，留空使用 10240。较大的页面会占用更多路由器内存；门户设计器仍按此上限校验内容大小。"
+
+msgid "Custom FAS parameters"
+msgstr "FAS 自定义参数"
+
+msgid "Use name=value; encode spaces as %20 and single quotes as %27."
+msgstr "格式：name=value；空格编码为 %20，单引号编码为 %27。"
+
+msgid "Custom ThemeSpec variables"
+msgstr "ThemeSpec 自定义变量"
+
+msgid "Use name=value or input=phone:Phone%20number:tel;email:Email:email. Values are native definitions, not shell commands."
+msgstr "格式：name=value 或 input=phone:Phone%20number:tel;email:Email:email。值为原生变量定义，不是 Shell 命令。"
+
+msgid "Custom portal images"
+msgstr "门户自定义图片"
+
+msgid "Use logo_png=https://example.com/logo.png. Native http://, https:// and file:/// URLs are accepted; encode URL separators such as & as %26."
+msgstr "格式：logo_png=https://example.com/logo.png。支持原生 http://、https:// 和 file:/// URL，URL 中的 & 等分隔符需编码为 %26。"
+
+msgid "Custom portal files"
+msgstr "门户自定义文件"
+
+msgid "Use advert_htm=https://example.com/advert.htm. Files are downloaded by the native theme when used."
+msgstr "格式：advert_htm=https://example.com/advert.htm。由使用它的原生主题下载文件。"
+
+msgid "Remote resource refresh interval (minutes)"
+msgstr "远程资源刷新间隔（分钟）"
+
+msgid "Empty or 0 disables periodic refresh. This applies to downloaded resources used by native themes."
+msgstr "留空或 0 停止周期刷新；仅适用于原生主题使用的下载资源。"
+
+msgid "Local authentication log mountpoint"
+msgstr "本地认证日志挂载点"
+
+msgid "Empty uses /tmp. Select an existing writable RAM or external-storage mountpoint; avoid internal flash. This setting does not change syslog."
+msgstr "留空使用 /tmp。请选择已有且可写的内存或外部存储挂载点，避免写入内置闪存。此项不改变系统日志。"
+
+msgid "Maximum local authentication log entries"
+msgstr "本地认证日志条数上限"
+
+msgid "Empty uses 100 entries. 0 disables log rotation; ensure sufficient storage."
+msgstr "留空使用 100 条，0 停止轮转，请确保存储空间足够。"
+
+msgid "DHCP leases file"
+msgstr "DHCP 租约文件"
+
+msgid "Empty searches the native default lease files. Use an existing readable file for a custom dnsmasq instance."
+msgstr "留空查找原生默认租约文件。自定义 dnsmasq 实例可指定已有且可读的租约文件。"
+
+msgid "Fast client interface scan"
+msgstr "快速扫描客户端接口"
+
+msgid "Empty inherits enabled. Disable to search actual wireless interfaces; extended or mesh networks may scan more slowly."
+msgstr "留空默认启用。停用后搜索实际无线接口，扩展网络或 Mesh 场景下扫描可能变慢。"

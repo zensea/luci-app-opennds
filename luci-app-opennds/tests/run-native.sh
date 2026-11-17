@@ -48,3 +48,4 @@ ucode_bin="$native_root/build/ucode"
 OPENNDS_JSONFILTER="$native_root/jsonpath/jsonpath" bash "$app_dir/tests/portal-shell.sh" \
 	"$app_dir/root/usr/lib/opennds/theme_luci.sh" "$fixture/status" \
 	"$app_dir/root/usr/lib/opennds/status_luci.sh" | tee "$output_dir/native-shell.log"
+bash "$app_dir/tests/configuration-shell.sh" "$app_dir" "$fixture/configuration-shell" | tee "$output_dir/native-rules-reauth.log"

@@ -289,7 +289,7 @@ const methods = {
 						!u.set('opennds', section, 'fasport', '443') ||
 						!u.set('opennds', section, 'login_option_enabled', '3') ||
 						!u.set('opennds', section, 'themespec_path', portal_script) ||
-						!u.set('opennds', section, 'statuspath', status_script) || !u.commit('opennds'))
+						(!current.section.statuspath && !u.set('opennds', section, 'statuspath', status_script)) || !u.commit('opennds'))
 						die('Unable to commit opennds configuration');
 				} catch (e) {
 					request.reply({ code: 3, saved: true, applied: false, message: 'Theme saved, but gateway configuration failed: ' + e }); return;

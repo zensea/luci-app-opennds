@@ -57,6 +57,31 @@ assert(saved.fasport == '443' && saved.luci_fasport == '8443' && saved.login_opt
 assert(saved.statuspath == instance.directory + '/dependency', 'Saving a theme must select its branded status page');
 assert(call(instance, 'save_portal', theme).code == 0, 'Repeated saves must succeed');
 
+const extended = original + "\toption statuspath '/mnt/usb/status.sh'\n\toption max_page_size '16384'\n";
+instance = service(extended);
+assert(call(instance, 'save_portal', theme).code == 0, 'Save with a custom status script must succeed');
+ctx = cursor(instance.directory, instance.directory + '/deltas', '');
+assert(ctx.load('opennds'), 'Custom status configuration must parse');
+assert(ctx.get('opennds', 'setup', 'statuspath') == '/mnt/usb/status.sh', 'Portal save must preserve an explicit status script');
+assert(ctx.get('opennds', 'setup', 'max_page_size') == '16384', 'Portal save must preserve the page size');
+const values = {
+	enable_serial_number_suffix: '0', reauth_interval: '60', nat_traversal_poll_interval: '59',
+	fup_upload_throttle_rate: '64', fup_download_throttle_rate: '128',
+	authenticated_users: ['block all to 192.0.2.10', 'allow all', 'allow all'],
+	preauthenticated_users: ['allow tcp port 443 to 192.0.2.10'], users_to_router: ['allow tcp port 8080'],
+	preemptivemac: ['mac=02:00:00:00:00:01;sessiontimeout=60;custom=room-1'],
+	fas_custom_parameters_list: ['message=hello%20world%27s'], fas_custom_variables_list: ['input=phone:Phone%20number:tel'],
+	fas_custom_images_list: ['logo_png=https://example.com/logo.png?v=1%26size=2'],
+	fas_custom_files_list: ['advert_htm=file:///mnt/usb/advert.htm'], remotes_refresh_interval: '720',
+	log_mountpoint: '/mnt/usb', max_log_entries: '0', dhcp_leases_file: '/tmp/dhcp.guest.leases', fast_client_scan: '0'
+};
+for (let key in values) assert(ctx.set('opennds', 'setup', key, values[key]), 'Unable to store ' + key);
+assert(ctx.commit('opennds'), 'Extended UCI configuration must persist');
+ctx = cursor(instance.directory, instance.directory + '/deltas', '');
+assert(ctx.load('opennds'), 'Extended UCI configuration must reload');
+for (let key in values) assert(sprintf('%J', ctx.get('opennds', 'setup', key)) == sprintf('%J', values[key]), 'UCI round-trip changed ' + key);
+assert(ctx.get('opennds', 'setup', 'faskey') == 'fixture-device-key' && ctx.get('opennds', 'setup', 'future_setting') == 'keep me', 'Extended writes must retain existing keys');
+
 for (let content in ["config opennds\n", "config opennds 'other'\n", "config opennds 'setup'\nconfig opennds 'other'\n", "config opennds 'setup'\noption bad 'unterminated\n"]) {
 	instance = service(content);
 	assert(call(instance, 'check_config').error, 'Unsupported configuration must be rejected');

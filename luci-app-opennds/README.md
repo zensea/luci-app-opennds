@@ -8,16 +8,18 @@ config opennds 'setup'
 
 ## 功能
 
-- 网关配置：接口、认证模式、外部 FAS、会话与空闲超时、限速、流量配额和域名访问控制。
+- 网关配置：51 项配置按常规、认证与 FAS、流量、访问控制、门户与资源、高级与日志六个选项卡组织。新增原生访问规则、预认证设备、超额降速、门户资源及日志管理。
 - 永久免认证 MAC 白名单：从主机提示选择设备，也支持手动输入；保留已保存 MAC 的拼写，读取主机提示失败时仍可编辑。
 - 运行总览：每 5 秒刷新进程、网关、客户端、流量和日志；提供 auth、deauth、trust、untrust 与服务重启。客户端 trust 是运行期操作，永久名单由网关配置保存。
 - 门户设计器：七个品牌与文案字段、手机实时预览，通过随包 ThemeSpec 渲染访客页面。预览按钮仅演示交互。
 
-保存门户将认证模式设为 3，选择本插件的认证模板与状态页，并将本地 FAS 初始化端口设为 443。认证页、成功/失败提示、已登录提示和会话状态页共用品牌配置。切换认证模式会保留外部 FAS 端口供切回时恢复。认证令牌、放行、日志和配额仍由 openNDS 原生逻辑负责。
+保存门户将认证模式设为 3，选择本插件的认证模板，并将本地 FAS 初始化端口设为 443。未显式设置 statuspath 时选择插件品牌状态页；已配置的原生或自定义状态脚本保持不变。使用插件状态页时，认证页、成功/失败提示和会话状态页共用品牌配置。切换认证模式会保留外部 FAS 端口供切回时恢复。认证令牌、放行、日志和配额仍由 openNDS 原生逻辑负责。
 
-从 2.0.0-r1 更新后，在设计器中再次保存，使 statuspath 指向 /usr/lib/opennds/status_luci.sh。状态页保留当前客户端流量、会话、详细信息、刷新和原生退出登录入口；511 提示也使用同一主题。
+从 2.0.0-r1 更新后，可在「门户与资源」将状态页设置为 /usr/lib/opennds/status_luci.sh。状态页保留当前客户端流量、会话、详细信息、刷新和原生退出登录入口；511 提示也使用同一主题。
 
 首次部署可参考[初始配置示例](examples/initial/README.md)。示例由管理员手工应用，插件安装不自动套用示例名单或文案。
+
+新增 20 项的分组、单位、空值、列表格式和验证边界见[配置入口说明](docs/configuration-options.md)。新增选项留空继承原生默认值；读取页面不会写配置。插件提供 /usr/check_reauth_interval.sh 衔接固定版本 BinAuth 的重新认证间隔检查，保持官方子模块不变。
 
 ## 结构与保护
 
@@ -93,6 +95,8 @@ OPENNDS_LUCI_ASSETS=/path/to/luci-assets node tests/browser.cjs
 ```
 
 可通过 OPENNDS_PLAYWRIGHT 指定 playwright-core 模块路径，OPENNDS_BROWSER 指定浏览器可执行文件，OPENNDS_BROWSER_OUTPUT 指定证据目录，OPENNDS_BASELINE 指定重构前插件目录以保存对照截图。浏览器测试使用真实 LuCI DOM 工厂和本地 RPC 替身。
+
+配置页的完整表单检查使用 `tests/config-browser.cjs`。`OPENNDS_CONFIG_ASSETS` 指向同版本官方 `luci.js`、`cbi.js`、`form.js`、`ui.js`、`validation.js`、`uci.js`、`rpc.js`、`fs.js` 和 `cascade.css` 所在目录；使用实际 LuCI 表单、UCI 及校验模块，本地 ubus 和设备发现为替身。
 
 [重构说明与验证结果](docs/refactoring.md)记录本次范围、代码量变化和验证边界。
 

@@ -186,9 +186,17 @@ const theme = () => ({ title: '访客 Wi-Fi', subtitle: 'Welcome', logo: 'wifi',
 const fixture = { mac: '02:00:00:00:00:01', ip: '192.0.2.10', state: 'Preauthenticated' };
 const running = () => ({ running: true, pid: '123', data: { clients: { [fixture.mac]: { ...fixture } }, interface: 'br-lan', gateway_port: '2050', version: 'test-version', uptime: '1m' } });
 const click = button => button.attrs.click({ preventDefault() {}, currentTarget: button });
+const addedOptions = {
+	enable_serial_number_suffix: 'general', reauth_interval: 'auth', nat_traversal_poll_interval: 'auth',
+	fup_upload_throttle_rate: 'traffic', fup_download_throttle_rate: 'traffic',
+	authenticated_users: 'access', preauthenticated_users: 'access', users_to_router: 'access', preemptivemac: 'access',
+	max_page_size: 'portal', statuspath: 'portal', fas_custom_parameters_list: 'portal', fas_custom_variables_list: 'portal',
+	fas_custom_images_list: 'portal', fas_custom_files_list: 'portal', remotes_refresh_interval: 'portal',
+	log_mountpoint: 'advanced', max_log_entries: 'advanced', dhcp_leases_file: 'advanced', fast_client_scan: 'advanced'
+};
 
 function configuration(config, values = {}, parseError, hints = { hosts: {} }, diagnostic = { major: 11 }) {
-	const options = [], inputs = {}, rpcCalls = [];
+	const options = [], inputs = {}, rpcCalls = [], tabs = [];
 	config['.name'] = config['.name'] || 'setup';
 	const uci = {
 		load: () => hints.uciFails ? Promise.reject(new Error('Unable to load UCI')) : Promise.resolve(config),
@@ -197,8 +205,8 @@ function configuration(config, values = {}, parseError, hints = { hosts: {} }, d
 		unset: (_, __, name) => { delete config[name]; },
 		sections: (_, __, callback) => callback(config)
 	};
-	const section = { tab() {}, taboption(_, type, name, title, description) {
-		const option = { name, type, description, choices: [], deps: [], depends(key, value) { this.deps.push({ key, value }); }, value(value, label) { this.choices.push({ value, label }); },
+	const section = { tab(name) { tabs.push(name); }, taboption(tab, type, name, title, description) {
+		const option = { name, tab, type, description, choices: [], deps: [], depends(key, value) { this.deps.push(typeof key === 'object' ? key : { [key]: value }); }, value(value, label) { this.choices.push({ value, label }); },
 			cfgvalue: () => config[name], formvalue: () => inputs[name] };
 		options.push(option);
 		return option;
@@ -207,11 +215,23 @@ function configuration(config, values = {}, parseError, hints = { hosts: {} }, d
 		section() { return section; }
 		render() {
 			for (const option of options) inputs[option.name] = Object.hasOwn(values, option.name) ? values[option.name] : option.cfgvalue(config['.name']) ?? option.default;
-			this.options = options; this.view = view; this.rpcCalls = rpcCalls;
+			this.options = options; this.view = view; this.rpcCalls = rpcCalls; this.inputs = inputs; this.tabs = tabs;
 			return this;
 		}
 		parse() {
 			if (parseError) return Promise.reject(new Error(parseError));
+			const editable = options.filter(option => Object.hasOwn(addedOptions, option.name) && (!option.deps.length || option.deps.some(dependency =>
+				Object.entries(dependency).every(([key, value]) => value instanceof RegExp ? value.test(inputs[key] || '') : value === inputs[key]))));
+			for (const option of editable) {
+				const checked = option.validate?.(config['.name'], inputs[option.name]);
+				if (checked !== undefined && checked !== true) return Promise.reject(new Error(checked));
+			}
+			for (const option of editable) {
+				if (inputs[option.name] === option.cfgvalue(config['.name'])) continue;
+				if (option.write) option.write(config['.name'], inputs[option.name]);
+				else if (inputs[option.name] == null || inputs[option.name] === '') delete config[option.name];
+				else config[option.name] = inputs[option.name];
+			}
 			config.login_option_enabled = inputs.login_option_enabled;
 			// Mirror LuCI: hidden retained fields are skipped; an active field
 			// is only written when its form value differs from cfgvalue().
@@ -222,7 +242,7 @@ function configuration(config, values = {}, parseError, hints = { hosts: {} }, d
 			}
 			return Promise.resolve();
 		}
-	}, Flag: 'Flag', Value: 'Value', ListValue: 'ListValue', DynamicList: 'DynamicList', NamedSection: 'NamedSection' };
+	}, Flag: 'Flag', Value: 'Value', ListValue: 'ListValue', TextValue: 'TextValue', DynamicList: 'DynamicList', NamedSection: 'NamedSection' };
 	const rpc = { declare: declaration => { rpcCalls.push(declaration); return () => declaration.method === 'check_config'
 		? Promise.resolve(diagnostic) : hints.failed ? Promise.reject(new Error('Host hints unavailable')) : Promise.resolve(hints.hosts); } };
 	const view = new Function('view', 'form', 'uci', 'rpc', 'widgets', '_', 'E', 'nds', read(views + 'config.js'))(
@@ -255,7 +275,7 @@ test('JavaScript, backend logic and JSON parse; shell scripts pass syntax checks
 	new Function(read('htdocs/luci-static/resources/opennds.js'));
 	for (const file of ['root/usr/share/rpcd/acl.d/luci-app-opennds.json', 'root/usr/share/luci/menu.d/luci-app-opennds.json', 'root/usr/share/ucitrack/luci-app-opennds.json']) JSON.parse(read(file));
 	backend();
-	for (const file of ['root/usr/lib/opennds/theme_luci.sh', 'root/usr/lib/opennds/status_luci.sh', 'root/etc/uci-defaults/80_luci-app-opennds', 'root/usr/libexec/luci-opennds-restart', 'tests/run-native.sh', 'tests/portal-shell.sh']) {
+	for (const file of ['root/usr/lib/opennds/theme_luci.sh', 'root/usr/lib/opennds/status_luci.sh', 'root/usr/check_reauth_interval.sh', 'root/etc/uci-defaults/80_luci-app-opennds', 'root/usr/libexec/luci-opennds-restart', 'tests/run-native.sh', 'tests/portal-shell.sh', 'tests/configuration-shell.sh']) {
 		const result = spawnSync(shell, ['-n', file], { cwd: root, encoding: 'utf8' });
 		assert.equal(result.status, 0, result.stderr || String(result.error));
 	}
@@ -323,6 +343,120 @@ test('form preserves hidden FAS values and uses daemon defaults', () => {
 	assert.equal(faspath.validate('', ''), true, 'empty path must pass');
 	assert.notEqual(faspath.validate('', 'no-leading-slash'), true, 'path without leading / must be rejected');
 	assert.notEqual(faspath.validate('', '/path with spaces'), true, 'path with spaces must be rejected');
+});
+
+test('configuration groups 51 native settings into the planned six tabs without writing on render', () => {
+	const config = { '.name': 'setup', login_option_enabled: '0', faskey: 'preserve-key', fasport: '8443', future_setting: 'keep' };
+	const before = JSON.stringify(config);
+	const app = configuration(config);
+	assert.equal(JSON.stringify(config), before);
+	assert.deepEqual(app.tabs, ['general', 'auth', 'traffic', 'access', 'portal', 'advanced']);
+	assert.equal(app.options.length, 51);
+	assert.equal(new Set(app.options.map(option => option.name)).size, 51);
+	for (const [name, tab] of Object.entries(addedOptions)) assert.equal(app.options.find(option => option.name === name).tab, tab, name);
+	assert.equal(app.options.find(option => option.name === 'themespec_path').tab, 'portal');
+});
+
+test('new numeric fields reject invalid boundaries and preserve inherited defaults and explicit zero', async () => {
+	const app = configuration({});
+	for (const name of ['reauth_interval', 'remotes_refresh_interval', 'fup_upload_throttle_rate', 'fup_download_throttle_rate', 'max_log_entries']) {
+		const option = app.options.find(option => option.name === name);
+		assert.equal(option.default, undefined);
+		for (const value of ['', undefined, '0', '60']) assert.equal(option.validate('setup', value), true, name + ': ' + value);
+		for (const value of ['-1', '1.5', '1e3', 'abc', '9007199254740992']) assert.notEqual(option.validate('setup', value), true, name + ': ' + value);
+	}
+	const page = app.options.find(option => option.name === 'max_page_size');
+	assert.equal(page.validate('', '1024'), true); assert.notEqual(page.validate('', '1023'), true);
+	const interval = app.options.find(option => option.name === 'nat_traversal_poll_interval');
+	for (const value of ['', '1', '59']) assert.equal(interval.validate('', value), true);
+	for (const value of ['0', '60', '-1', '1.1']) assert.notEqual(interval.validate('', value), true);
+	const config = { login_option_enabled: '0', fasport: '8443', future_setting: 'keep', faskey: 'keep-key' };
+	await configuration(config).parse();
+	for (const name of Object.keys(addedOptions)) assert.equal(Object.hasOwn(config, name), false, name + ' default was persisted');
+	await configuration(config, { reauth_interval: '0', max_log_entries: '0', enable_serial_number_suffix: '0' }).parse();
+	assert.equal(config.reauth_interval, '0'); assert.equal(config.max_log_entries, '0'); assert.equal(config.enable_serial_number_suffix, '0');
+	await configuration(config, { reauth_interval: '', max_log_entries: '', enable_serial_number_suffix: '' }).parse();
+	assert.equal(config.reauth_interval, undefined); assert.equal(config.max_log_entries, undefined); assert.equal(config.enable_serial_number_suffix, undefined);
+	assert.equal(config.future_setting, 'keep'); assert.equal(config.faskey, 'keep-key');
+});
+
+test('new path inputs accept native locations and reject relative or shell-expanded paths', () => {
+	for (const name of ['statuspath', 'log_mountpoint', 'dhcp_leases_file']) {
+		const field = configuration({}).options.find(option => option.name === name);
+		for (const value of ['', '/tmp', '/mnt/usb-1/logs', '/usr/lib/opennds/custom_status.sh']) assert.equal(field.validate('', value), true, value);
+		for (const value of ['relative/path', '/tmp/a b', '/tmp/$(id)', '/tmp/`id`', '/tmp/a\nfile', '/tmp/a;id']) assert.notEqual(field.validate('', value), true, value);
+	}
+});
+
+test('access rule grammar preserves address and protocol meaning in the pinned native parser', () => {
+	for (const name of ['authenticated_users', 'preauthenticated_users', 'users_to_router']) {
+		const field = configuration({}).options.find(option => option.name === name);
+		for (const rule of ['allow all', 'block all to 192.0.2.0/24', 'allow tcp port 443', 'allow udp port 1000-2000 to 192.0.2.1', 'passthrough all from 192.0.2.10', 'allow tcp port 443 to portal.example.com']) assert.equal(field.validate('', rule), true, rule);
+		for (const rule of ['allow tcp', 'block to 192.0.2.0/24', 'allow all port 443', 'allow tcp port 0', 'allow udp port 65536', 'allow tcp port 500-100', 'block all to 300.2.3.4', 'block all to 192.0.2.1/33', 'allow all; reboot', 'allow tcp port 443 to $(id)']) assert.notEqual(field.validate('', rule), true, rule);
+		assert.match(field.validate('', 'allow all\nwrong'), /2$/);
+	}
+});
+
+test('native ordered lists round-trip duplicates, retain hidden values and remove only when cleared', async () => {
+	const rules = ['block all to 192.0.2.10', 'allow all', 'allow all'];
+	const config = { login_option_enabled: '3', fasport: '443', authenticated_users: rules.slice(), fas_custom_parameters_list: ['message=hello%20world'], faskey: 'key' };
+	const app = configuration(config);
+	assert.equal(app.options.find(option => option.name === 'authenticated_users').cfgvalue('setup'), rules.join('\n'));
+	await app.parse(); assert.deepEqual(config.authenticated_users, rules);
+	await configuration(config, { authenticated_users: rules.slice().reverse().join('\n') }).parse();
+	assert.deepEqual(config.authenticated_users, rules.slice().reverse());
+	await configuration(config, { login_option_enabled: '1', fas_custom_parameters_list: '' }).parse();
+	assert.deepEqual(config.fas_custom_parameters_list, ['message=hello%20world']);
+	await configuration(config, { login_option_enabled: '3', authenticated_users: '', fas_custom_parameters_list: '' }).parse();
+	assert.equal(config.authenticated_users, undefined); assert.equal(config.fas_custom_parameters_list, undefined);
+	assert.equal(config.faskey, 'key');
+});
+
+test('preemptive records allow only native keys, MACs, safe numeric limits and literal custom data', () => {
+	const field = configuration({}).options.find(option => option.name === 'preemptivemac');
+	for (const value of ['mac=AA:BB:CC:DD:EE:FF', 'mac=00:11:22:33:44:55;sessiontimeout=60;uploadrate=100;downloadrate=1000;uploadquota=0;downloadquota=0;custom=room-1']) assert.equal(field.validate('', value), true, value);
+	for (const value of ['mac=bad', 'sessiontimeout=60', 'mac=00:11:22:33:44:55;sessiontimeout=-1', 'mac=00:11:22:33:44:55;custom=$(id)', 'mac=00:11:22:33:44:55;unknown=1', 'mac=00:11:22:33:44:55;mac=AA:BB:CC:DD:EE:FF']) assert.notEqual(field.validate('', value), true, value);
+});
+
+test('custom resource definitions preserve encoding and validate names, URLs and input declarations', () => {
+	const fields = Object.fromEntries(configuration({}).options.map(option => [option.name, option]));
+	assert.equal(fields.fas_custom_parameters_list.validate('', 'message=hello%20world%27s'), true);
+	assert.equal(fields.fas_custom_variables_list.validate('', 'input=phone:Phone%20number:tel;postcode:Postcode:text'), true);
+	assert.equal(fields.fas_custom_variables_list.validate('', 'caretaker_phone_number=Ext0118'), true);
+	assert.equal(fields.fas_custom_images_list.validate('', 'logo_png=https://example.com/logo.png?v=1%26size=2'), true);
+	assert.equal(fields.fas_custom_files_list.validate('', 'advert_htm=file:///mnt/usb/advert.htm'), true);
+	for (const value of ['message=hello world', 'message=$(id)', 'message=bad%QZ', '=value']) assert.notEqual(fields.fas_custom_parameters_list.validate('', value), true, value);
+	assert.notEqual(fields.fas_custom_images_list.validate('', 'logo=javascript:alert(1)'), true);
+	assert.notEqual(fields.fas_custom_variables_list.validate('', 'input=phone:Phone:unknown'), true);
+});
+
+test('new dependent fields are retained and polling is available only for HTTPS Authmon modes', async () => {
+	const config = { login_option_enabled: '0', fas_secure_enabled: '4', fasport: '8443', nat_traversal_poll_interval: '59', uploadquota: '100', fup_upload_throttle_rate: '64' };
+	const app = configuration(config);
+	assert.deepEqual(app.options.find(option => option.name === 'nat_traversal_poll_interval').deps,
+		[{ login_option_enabled: '0', fas_secure_enabled: '3' }, { login_option_enabled: '0', fas_secure_enabled: '4' }]);
+	await configuration(config, { fas_secure_enabled: '1', nat_traversal_poll_interval: '', uploadquota: '0', fup_upload_throttle_rate: '' }).parse();
+	assert.equal(config.nat_traversal_poll_interval, '59'); assert.equal(config.fup_upload_throttle_rate, '64');
+	for (const name of Object.keys(addedOptions)) {
+		const field = app.options.find(option => option.name === name);
+		if (field.deps.length) assert.equal(field.retain, true, name);
+	}
+});
+
+test('invalid new input leaves gateway mode, FAS port and unknown values untouched', async () => {
+	const config = { login_option_enabled: '0', fasport: '8443', future_setting: 'keep' };
+	const app = configuration(config, { login_option_enabled: '3', max_page_size: '1' });
+	const before = JSON.stringify(config);
+	await assert.rejects(app.parse()); assert.equal(JSON.stringify(config), before);
+});
+
+test('portal saves preserve administrator status scripts while selecting the plugin default only when unset', () => {
+	for (const statuspath of ['/usr/lib/opennds/client_params.sh', '/mnt/usb/my_status.sh', '/usr/lib/opennds/status_luci.sh']) {
+		const service = backend({ config: { statuspath } });
+		assert.equal(service.methods.save_portal.call({ args: { config: theme() } }).code, 0);
+		assert.equal(service.config.statuspath, statuspath);
+		assert.ok(!service.updates.some(update => update.key === 'statuspath'));
+	}
 });
 
 test('trusted MAC picker reads host hints through the read-only LuCI RPC', async () => {

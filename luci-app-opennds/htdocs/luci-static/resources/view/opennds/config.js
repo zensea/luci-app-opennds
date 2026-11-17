@@ -6,6 +6,61 @@
 'require opennds as nds';
 'require tools.widgets as widgets';
 
+function unsigned(value, minimum, maximum) {
+	return value === '' || value == null || (/^[0-9]+$/).test(value) &&
+		Number.isSafeInteger(Number(value)) && Number(value) >= minimum && Number(value) <= maximum;
+}
+
+function absolutePath(value) {
+	return !value || (/^\/(?:[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_.-]+\/?$/).test(value);
+}
+
+function ruleValid(value) {
+	value = value.replace(/[ \t]+/g, ' ');
+	var rule = (/^(allow|block|passthrough)(?: (all|tcp|udp))?(?: port ([0-9]+(?:-[0-9]+)?))?(?: (to|from) ([A-Za-z0-9._/-]+))?$/).exec(value);
+	// Native v11 loses the address in "block to X" and the protocol without a port.
+	if (!rule || !rule[2] || rule[2] !== 'all' && !rule[3] || rule[3] && rule[2] !== 'tcp' && rule[2] !== 'udp') return false;
+	if (rule[3]) {
+		var ports = rule[3].split('-');
+		if (!ports.every(function(port) { return unsigned(port, 1, 65535); }) || Number(ports[0]) > Number(ports[ports.length - 1])) return false;
+	}
+	if (!rule[5]) return true;
+	var address = rule[5].split('/');
+	if ((/^[0-9.]+$/).test(address[0]))
+		return address.length <= 2 && address[0].split('.').length === 4 &&
+			address[0].split('.').every(function(part) { return part !== '' && unsigned(part, 0, 255); }) &&
+			(address.length === 1 || address[1] !== '' && unsigned(address[1], 0, 32));
+	return address.length === 1 && address[0].length <= 253 && address[0].split('.').every(function(label) {
+		return (/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/).test(label);
+	});
+}
+
+function preemptiveValid(value) {
+	var found = Object.create(null);
+	var valid = value.split(';').every(function(part) {
+		var pair = part.split('=');
+		if (pair.length !== 2 || found[pair[0]]) return false;
+		found[pair[0]] = true;
+		if (pair[0] === 'mac') return (/^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i).test(pair[1]);
+		if (pair[0] === 'custom') return (/^[A-Za-z0-9_.:@+/-]*$/).test(pair[1]);
+		return ['sessiontimeout', 'uploadrate', 'downloadrate', 'uploadquota', 'downloadquota'].indexOf(pair[0]) >= 0 &&
+			pair[1] !== '' && unsigned(pair[1], 0, 4294967295);
+	});
+	return valid && !!found.mac;
+}
+
+function customValid(value, kind) {
+	var pair = (/^([A-Za-z_][A-Za-z0-9_]*)=(.+)$/).exec(value);
+	if (!pair || (/[\s,'"`$\\<>|&]/).test(value) || (/%(?![0-9A-Fa-f]{2})/).test(value)) return false;
+	if (kind === 'images' || kind === 'files')
+		return (/^[A-Za-z][A-Za-z0-9_]*_[A-Za-z0-9]+$/).test(pair[1]) && (/^(https?:\/\/[^/]+\/|file:\/\/\/).+/).test(pair[2]);
+	if (kind === 'variables' && pair[1] === 'input')
+		return pair[2].split(';').every(function(field) {
+			return (/^[A-Za-z_][A-Za-z0-9_]*:[^:;]+:(text|email|tel|number|password|date|url)$/).test(field);
+		});
+	return true;
+}
+
 return view.extend({
 	load: function() {
 		var callHostHints = rpc.declare({
@@ -42,6 +97,60 @@ return view.extend({
 		s.tab('auth', _('Authentication & FAS'));
 		s.tab('traffic', _('Traffic Control & Quotas'));
 		s.tab('access', _('Access Control & Walled Garden'));
+		s.tab('portal', _('Portal & Resources'));
+		s.tab('advanced', _('Advanced & Logging'));
+
+		function numberOption(tab, name, title, description, placeholder, minimum, maximum) {
+			var option = s.taboption(tab, form.Value, name, title, description);
+			option.placeholder = placeholder;
+			option.rmempty = true;
+			option.retain = true;
+			option.validate = function(section_id, value) {
+				return unsigned(value, minimum, maximum) ? true : _('Enter an integer in the allowed range.');
+			};
+			return option;
+		}
+		function pathOption(tab, name, title, description, placeholder) {
+			var option = s.taboption(tab, form.Value, name, title, description);
+			option.placeholder = placeholder;
+			option.rmempty = true;
+			option.retain = true;
+			option.validate = function(section_id, value) { return absolutePath(value) ? true : _('Enter an absolute path without spaces or shell characters.'); };
+			return option;
+		}
+		function listOption(tab, name, title, description, validate) {
+			var option = s.taboption(tab, form.TextValue, name, title,
+				'<span style="overflow-wrap:anywhere">' + description + '<br />' +
+				_('One entry per line. Order is preserved; an empty field removes the custom list.') + '</span>');
+			option.rows = 4;
+			option.wrap = true;
+			option.rmempty = true;
+			option.retain = true;
+			option.cfgvalue = function(section_id) {
+				var stored = uci.get('opennds', section_id, name);
+				return Array.isArray(stored) ? stored.join('\n') : stored || '';
+			};
+			option.validate = function(section_id, value) {
+				var lines = (value || '').split('\n');
+				for (var i = 0; i < lines.length; i++)
+					if (lines[i].trim() && !validate(lines[i].trim())) return _('Invalid entry at line') + ' ' + (i + 1);
+				return true;
+			};
+			option.write = function(section_id, value) {
+				var lines = (value || '').split(/\r?\n/).filter(function(line) { return line.trim(); });
+				if (lines.length) uci.set('opennds', section_id, name, lines);
+				else uci.unset('opennds', section_id, name);
+			};
+			return option;
+		}
+		function inheritedSwitch(tab, name, title, description) {
+			var option = s.taboption(tab, form.ListValue, name, title, description);
+			option.value('', _('Inherit default (enabled)'));
+			option.value('1', _('Enabled'));
+			option.value('0', _('Disabled'));
+			option.rmempty = true;
+			return option;
+		}
 
 		/* ---------------------------------------------------------
 		 * Tab 1: General Settings
@@ -75,6 +184,8 @@ return view.extend({
 			// Parentheses let the SDK's jsmin recognize this regular expression.
 			return (/['\r\n]/).test(value || '') ? _('Name cannot contain line breaks or single quotes. Use &#39; for single quotes.') : true;
 		};
+		inheritedSwitch('general', 'enable_serial_number_suffix', _('Append device serial number'),
+			_('Append a MAC-derived suffix to the gateway name. Empty inherits enabled. Changing it also changes the FAS gateway identifier.'));
 
 		o = s.taboption('general', form.Value, 'gatewayport', _('Gateway web server port (gatewayport)'),
 			_('Port for openNDS embedded web server, default 2050 (port 80 is prohibited).'));
@@ -177,13 +288,12 @@ return view.extend({
 			return !/\s/.test(value || '') ? true : _('Key cannot contain whitespace.');
 		};
 
-		// ThemeSpec Settings (Dependencies: login_option_enabled == '3')
-		o = s.taboption('auth', form.Value, 'themespec_path', _('ThemeSpec script path (themespec_path)'),
-			_('Absolute path to custom ThemeSpec script (default is /usr/lib/opennds/theme_click-to-continue-basic.sh).'));
-		o.depends('login_option_enabled', '3');
-		o.retain = true;
-		o.default = '/usr/lib/opennds/theme_click-to-continue-basic.sh';
-		o.placeholder = '/usr/lib/opennds/theme_click-to-continue-basic.sh';
+		numberOption('auth', 'reauth_interval', _('Minimum reauthentication interval (seconds)'),
+			_('Wait after deauthentication before accepting another login. Empty or 0 disables the delay. Requires the plugin BinAuth hook.'), '0', 0, 4294967295);
+		o = numberOption('auth', 'nat_traversal_poll_interval', _('Authmon polling interval (seconds)'),
+			_('Native Authmon accepts 1–59 seconds. Empty uses 5 seconds; 60 falls back to 5 in this version.'), '5', 1, 59);
+		o.depends({ login_option_enabled: '0', fas_secure_enabled: '3' });
+		o.depends({ login_option_enabled: '0', fas_secure_enabled: '4' });
 
 		/* ---------------------------------------------------------
 		 * Tab 3: Traffic Control & Quotas
@@ -202,6 +312,14 @@ return view.extend({
 			var option = s.taboption('traffic', form.Value, field[0], field[1], field[2]);
 			option.default = field[3];
 			option.datatype = field[4] || 'uinteger';
+		});
+		['upload', 'download'].forEach(function(direction) {
+			var option = numberOption('traffic', 'fup_' + direction + '_throttle_rate',
+				direction === 'upload' ? _('Upload speed after quota (kbit/s)') : _('Download speed after quota (kbit/s)'),
+				_('After the matching quota is reached, use this speed. Empty or 0 uses native deauthentication instead of throttling.'), '0', 0, Number.MAX_SAFE_INTEGER);
+			var dependency = {};
+			dependency[direction + 'quota'] = /^[1-9][0-9]*$/;
+			option.depends(dependency);
 		});
 
 		/* ---------------------------------------------------------
@@ -237,25 +355,67 @@ return view.extend({
 			o.value(value, E('span', {}, [value + (detail ? '(' + detail.trim() + ')' : '')]));
 		});
 
+		listOption('access', 'preemptivemac', _('Preemptively authenticated devices'),
+			_('Use mac=AA:BB:CC:DD:EE:FF;sessiontimeout=60;uploadrate=100;downloadrate=1000;uploadquota=0;downloadquota=0;custom=device. Unlike trusted MACs, these devices retain counters, quotas and timeouts. Empty or 0 quota parameters inherit global values. Custom data accepts letters, digits and _ . : @ + / -.'), preemptiveValid)
+			.depends('allow_preemptive_authentication', '1');
+		listOption('access', 'preauthenticated_users', _('Rules before authentication'),
+			_('Example: allow tcp port 443 to 192.0.2.10 or block all to 192.0.2.0/24. Specify all, or tcp/udp with a port; native v11 misinterprets omitted protocols. Addresses may be IPv4, subnets or single-address hostnames.'), ruleValid);
+		listOption('access', 'authenticated_users', _('Rules after authentication'),
+			_('Rules follow native ordering. Defining entries replaces the native default allow-all policy; include the required allow rules.'), ruleValid);
+		listOption('access', 'users_to_router', _('Rules for access to the router'),
+			_('Example: allow tcp port 8080. Native DNS, DHCP, SSH and HTTPS management rules remain included. These entries do not override a firewall passthrough configuration.'), ruleValid);
 		o = s.taboption('access', form.DynamicList, 'walledgarden_fqdn_list', _('Walled garden FQDN list (walledgarden_fqdn_list)'),
 			_('Domains accessible to preauthenticated clients before logging in.'));
 		o.datatype = 'host(0)';
 		o.placeholder = 'captive.apple.com';
-
 		o = s.taboption('access', form.DynamicList, 'walledgarden_port_list', _('Walled garden port list (walledgarden_port_list)'),
 			_('Allowed ports for walled garden domains (typically 443; empty allows all ports).'));
 		o.datatype = 'port';
 		o.placeholder = '443';
-
 		o = s.taboption('access', form.DynamicList, 'blocklist_fqdn_list', _('Blocked FQDN list (blocklist_fqdn_list)'),
 			_('Domains blocked even for authenticated clients.'));
 		o.datatype = 'host(0)';
 		o.placeholder = 'unwanted-domain.com';
-
 		o = s.taboption('access', form.DynamicList, 'blocklist_port_list', _('Blocked port list (blocklist_port_list)'),
 			_('Ports blocked for blocklist domains (empty blocks all ports).'));
 		o.datatype = 'port';
 		o.placeholder = '80';
+
+		// Portal and resources share the same UCI section as authentication.
+		o = pathOption('portal', 'themespec_path', _('ThemeSpec script path (themespec_path)'),
+			_('Absolute path to custom ThemeSpec script (default is /usr/lib/opennds/theme_click-to-continue-basic.sh).'), '/usr/lib/opennds/theme_click-to-continue-basic.sh');
+		o.depends('login_option_enabled', '3');
+		// Keep the existing ThemeSpec default when first selecting custom mode.
+		o.default = '/usr/lib/opennds/theme_click-to-continue-basic.sh';
+		o = pathOption('portal', 'statuspath', _('Status and error page script'),
+			_('Empty uses the native status page. Explicit paths survive saving Portal Studio branding. The script must exist and be executable on the router.'), '/usr/lib/opennds/client_params.sh');
+		o.value('/usr/lib/opennds/client_params.sh', _('Native status page'));
+		o.value('/usr/lib/opennds/status_luci.sh', _('Plugin branded status page'));
+		numberOption('portal', 'max_page_size', _('Maximum portal page size (bytes)'),
+			_('Minimum 1024 bytes. Empty uses 10240. Larger pages consume more router memory; Portal Studio still checks its content against this limit.'), '10240', 1024, Number.MAX_SAFE_INTEGER);
+		[
+			['parameters', _('Custom FAS parameters'), _('Use name=value; encode spaces as %20 and single quotes as %27.')],
+			['variables', _('Custom ThemeSpec variables'), _('Use name=value or input=phone:Phone%20number:tel;email:Email:email. Values are native definitions, not shell commands.')],
+			['images', _('Custom portal images'), _('Use logo_png=https://example.com/logo.png. Native http://, https:// and file:/// URLs are accepted; encode URL separators such as & as %26.')],
+			['files', _('Custom portal files'), _('Use advert_htm=https://example.com/advert.htm. Files are downloaded by the native theme when used.')]
+		].forEach(function(field) {
+			var option = listOption('portal', 'fas_custom_' + field[0] + '_list', field[1], field[2], function(value) { return customValid(value, field[0]); });
+			option.depends('login_option_enabled', '0');
+			option.depends('login_option_enabled', '3');
+		});
+		o = numberOption('portal', 'remotes_refresh_interval', _('Remote resource refresh interval (minutes)'),
+			_('Empty or 0 disables periodic refresh. This applies to downloaded resources used by native themes.'), '0', 0, 4294967295);
+		o.depends('login_option_enabled', '0');
+		o.depends('login_option_enabled', '3');
+
+		pathOption('advanced', 'log_mountpoint', _('Local authentication log mountpoint'),
+			_('Empty uses /tmp. Select an existing writable RAM or external-storage mountpoint; avoid internal flash. This setting does not change syslog.'), '/tmp');
+		numberOption('advanced', 'max_log_entries', _('Maximum local authentication log entries'),
+			_('Empty uses 100 entries. 0 disables log rotation; ensure sufficient storage.'), '100', 0, Number.MAX_SAFE_INTEGER);
+		pathOption('advanced', 'dhcp_leases_file', _('DHCP leases file'),
+			_('Empty searches the native default lease files. Use an existing readable file for a custom dnsmasq instance.'), '/tmp/dhcp.leases');
+		inheritedSwitch('advanced', 'fast_client_scan', _('Fast client interface scan'),
+			_('Empty inherits enabled. Disable to search actual wireless interfaces; extended or mesh networks may scan more slowly.'));
 
 		var previousMode = uci.get('opennds', 'setup', 'login_option_enabled') || '1';
 		// Normalize after every option has parsed so hidden FAS fields cannot

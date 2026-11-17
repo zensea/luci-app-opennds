@@ -498,3 +498,153 @@ msgstr ""
 
 msgid "3. External FAS server"
 msgstr ""
+
+msgid "Portal & Resources"
+msgstr ""
+
+msgid "Advanced & Logging"
+msgstr ""
+
+msgid "Enter an integer in the allowed range."
+msgstr ""
+
+msgid "Enter an absolute path without spaces or shell characters."
+msgstr ""
+
+msgid "One entry per line. Order is preserved; an empty field removes the custom list."
+msgstr ""
+
+msgid "Invalid entry at line"
+msgstr ""
+
+msgid "Inherit default (enabled)"
+msgstr ""
+
+msgid "Enabled"
+msgstr ""
+
+msgid "Disabled"
+msgstr ""
+
+msgid "Append device serial number"
+msgstr ""
+
+msgid "Append a MAC-derived suffix to the gateway name. Empty inherits enabled. Changing it also changes the FAS gateway identifier."
+msgstr ""
+
+msgid "Minimum reauthentication interval (seconds)"
+msgstr ""
+
+msgid "Wait after deauthentication before accepting another login. Empty or 0 disables the delay. Requires the plugin BinAuth hook."
+msgstr ""
+
+msgid "Authmon polling interval (seconds)"
+msgstr ""
+
+msgid "Native Authmon accepts 1–59 seconds. Empty uses 5 seconds; 60 falls back to 5 in this version."
+msgstr ""
+
+msgid "Upload speed after quota (kbit/s)"
+msgstr ""
+
+msgid "Download speed after quota (kbit/s)"
+msgstr ""
+
+msgid "After the matching quota is reached, use this speed. Empty or 0 uses native deauthentication instead of throttling."
+msgstr ""
+
+msgid "Preemptively authenticated devices"
+msgstr ""
+
+msgid "Use mac=AA:BB:CC:DD:EE:FF;sessiontimeout=60;uploadrate=100;downloadrate=1000;uploadquota=0;downloadquota=0;custom=device. Unlike trusted MACs, these devices retain counters, quotas and timeouts. Empty or 0 quota parameters inherit global values. Custom data accepts letters, digits and _ . : @ + / -."
+msgstr ""
+
+msgid "Rules before authentication"
+msgstr ""
+
+msgid "Example: allow tcp port 443 to 192.0.2.10 or block all to 192.0.2.0/24. Specify all, or tcp/udp with a port; native v11 misinterprets omitted protocols. Addresses may be IPv4, subnets or single-address hostnames."
+msgstr ""
+
+msgid "Rules after authentication"
+msgstr ""
+
+msgid "Rules follow native ordering. Defining entries replaces the native default allow-all policy; include the required allow rules."
+msgstr ""
+
+msgid "Rules for access to the router"
+msgstr ""
+
+msgid "Example: allow tcp port 8080. Native DNS, DHCP, SSH and HTTPS management rules remain included. These entries do not override a firewall passthrough configuration."
+msgstr ""
+
+msgid "Status and error page script"
+msgstr ""
+
+msgid "Empty uses the native status page. Explicit paths survive saving Portal Studio branding. The script must exist and be executable on the router."
+msgstr ""
+
+msgid "Native status page"
+msgstr ""
+
+msgid "Plugin branded status page"
+msgstr ""
+
+msgid "Maximum portal page size (bytes)"
+msgstr ""
+
+msgid "Minimum 1024 bytes. Empty uses 10240. Larger pages consume more router memory; Portal Studio still checks its content against this limit."
+msgstr ""
+
+msgid "Custom FAS parameters"
+msgstr ""
+
+msgid "Use name=value; encode spaces as %20 and single quotes as %27."
+msgstr ""
+
+msgid "Custom ThemeSpec variables"
+msgstr ""
+
+msgid "Use name=value or input=phone:Phone%20number:tel;email:Email:email. Values are native definitions, not shell commands."
+msgstr ""
+
+msgid "Custom portal images"
+msgstr ""
+
+msgid "Use logo_png=https://example.com/logo.png. Native http://, https:// and file:/// URLs are accepted; encode URL separators such as & as %26."
+msgstr ""
+
+msgid "Custom portal files"
+msgstr ""
+
+msgid "Use advert_htm=https://example.com/advert.htm. Files are downloaded by the native theme when used."
+msgstr ""
+
+msgid "Remote resource refresh interval (minutes)"
+msgstr ""
+
+msgid "Empty or 0 disables periodic refresh. This applies to downloaded resources used by native themes."
+msgstr ""
+
+msgid "Local authentication log mountpoint"
+msgstr ""
+
+msgid "Empty uses /tmp. Select an existing writable RAM or external-storage mountpoint; avoid internal flash. This setting does not change syslog."
+msgstr ""
+
+msgid "Maximum local authentication log entries"
+msgstr ""
+
+msgid "Empty uses 100 entries. 0 disables log rotation; ensure sufficient storage."
+msgstr ""
+
+msgid "DHCP leases file"
+msgstr ""
+
+msgid "Empty searches the native default lease files. Use an existing readable file for a custom dnsmasq instance."
+msgstr ""
+
+msgid "Fast client interface scan"
+msgstr ""
+
+msgid "Empty inherits enabled. Disable to search actual wireless interfaces; extended or mesh networks may scan more slowly."
+msgstr ""
