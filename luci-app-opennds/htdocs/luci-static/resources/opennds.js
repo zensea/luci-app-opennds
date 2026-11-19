@@ -15,6 +15,8 @@ return baseclass.extend({
 	clientAction: call('client_action', ['action', 'mac', 'duration']),
 	restart: call('reload_service'),
 	checkConfig: call('check_config'),
+	getConfig: call('get_config'),
+	saveConfig: call('save_config', ['content', 'original', 'apply']),
 
 	loadOverview: function() {
 		return Promise.all([

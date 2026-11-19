@@ -181,12 +181,13 @@ jobs:
           if test -f "$OUTPUT_DIR/luci-app-opennds.files.txt"; then
             package_views="$RUNNER_TEMP/opennds-package/www/luci-static/resources/view/opennds"
             node --check "$package_views/../../opennds.js"
-            for view in config overview studio; do
+            for view in config overview studio expert; do
               node --check "$package_views/$view.js"
             done
             OPENNDS_TEST_VIEWS_DIR="$package_views" node --test "$APP_DIR/tests/regression.test.cjs" \
               2>&1 | tee "$OUTPUT_DIR/packaged-regression.log"
             grep -qx './www/luci-static/resources/opennds.js' "$OUTPUT_DIR/luci-app-opennds.files.txt"
+            grep -qx './www/luci-static/resources/view/opennds/expert.js' "$OUTPUT_DIR/luci-app-opennds.files.txt"
             grep -qx './usr/share/rpcd/ucode/opennds.uc' "$OUTPUT_DIR/luci-app-opennds.files.txt"
             grep -qx './usr/libexec/luci-opennds-status.uc' "$OUTPUT_DIR/luci-app-opennds.files.txt"
             grep -qx './usr/lib/opennds/theme_luci.sh' "$OUTPUT_DIR/luci-app-opennds.files.txt"

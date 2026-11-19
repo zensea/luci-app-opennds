@@ -38,11 +38,14 @@ test "$(id -u)" -ne 0 # Filesystem permission checks must run without root bypas
 fixture=$(mktemp -d "${TMPDIR:-/tmp}/opennds-native-test.XXXXXX")
 trap 'rm -rf -- "$fixture"' EXIT
 mkdir "$fixture/portal" "$fixture/config" "$fixture/status"
+mkdir "$fixture/expert"
 ucode_bin="$native_root/build/ucode"
 "$ucode_bin" -L "$native_root/build" "$app_dir/tests/portal-read.uc" \
 	"$app_dir/root/usr/share/rpcd/ucode/opennds.uc" "$fixture/portal" | tee "$output_dir/native-portal.log"
 "$ucode_bin" -L "$native_root/build" "$app_dir/tests/configuration.uc" \
 	"$app_dir/root/usr/share/rpcd/ucode/opennds.uc" "$fixture/config" | tee "$output_dir/native-configuration.log"
+"$ucode_bin" -L "$native_root/build" "$app_dir/tests/expert.uc" \
+	"$app_dir/root/usr/share/rpcd/ucode/opennds.uc" "$fixture/expert" | tee "$output_dir/native-expert.log"
 "$ucode_bin" -L "$native_root/build" "$app_dir/tests/status.uc" \
 	"$app_dir/root/usr/libexec/luci-opennds-status.uc" | tee "$output_dir/native-status.log"
 OPENNDS_JSONFILTER="$native_root/jsonpath/jsonpath" bash "$app_dir/tests/portal-shell.sh" \

@@ -645,3 +645,180 @@ msgstr "快速扫描客户端接口"
 
 msgid "Empty inherits enabled. Disable to search actual wireless interfaces; extended or mesh networks may scan more slowly."
 msgstr "留空默认启用。停用后搜索实际无线接口，扩展网络或 Mesh 场景下扫描可能变慢。"
+
+msgid "Allow"
+msgstr "允许"
+
+msgid "Deny"
+msgstr "拒绝"
+
+msgid "TCP and UDP"
+msgstr "TCP 和 UDP"
+
+msgid "All protocols"
+msgstr "全部协议"
+
+msgid "Any address"
+msgstr "任意地址"
+
+msgid "Action"
+msgstr "操作"
+
+msgid "Protocol"
+msgstr "协议"
+
+msgid "Port or range"
+msgstr "端口或端口范围"
+
+msgid "Destination IP or subnet"
+msgstr "目标 IP 或网段"
+
+msgid "Enter a port from 1 to 65535, or an ascending range, and a valid destination."
+msgstr "请填写 1～65535 的端口或递增端口范围，以及有效的目标地址。"
+
+msgid "MAC address"
+msgstr "MAC 地址"
+
+msgid "Session duration (minutes)"
+msgstr "会话时长（分钟）"
+
+msgid "Upload speed (kbit/s)"
+msgstr "上传速度（kbit/s）"
+
+msgid "Download speed (kbit/s)"
+msgstr "下载速度（kbit/s）"
+
+msgid "Upload quota (kB)"
+msgstr "上传额度（kB）"
+
+msgid "Download quota (kB)"
+msgstr "下载额度（kB）"
+
+msgid "Device note"
+msgstr "设备备注"
+
+msgid "Inherit default"
+msgstr "继承全局设置"
+
+msgid "Enter a valid MAC address and non-negative integer limits."
+msgstr "请填写有效的 MAC 地址，限制值须为非负整数。"
+
+msgid "Advanced entry: preserved unchanged. Edit it in Expert Configuration."
+msgstr "此项使用高级格式，保留原样。请在“专家配置”中编辑。"
+
+msgid "Remove"
+msgstr "移除"
+
+msgid "Add rule"
+msgstr "添加规则"
+
+msgid "Add device"
+msgstr "添加设备"
+
+msgid "Show native entries"
+msgstr "查看原生配置条目"
+
+msgid "Limit default connection speed"
+msgstr "限制默认上网速度"
+
+msgid "Upload allowance"
+msgstr "上传流量额度"
+
+msgid "Download allowance"
+msgstr "下载流量额度"
+
+msgid "Unlimited"
+msgstr "不限制"
+
+msgid "Stop access when exceeded"
+msgstr "超额后停止上网"
+
+msgid "Reduce speed when exceeded"
+msgstr "超额后降低速度"
+
+msgid "Enter a positive allowance in kB."
+msgstr "请填写大于 0 的流量额度，单位为 kB。"
+
+msgid "Speed used after this allowance is exhausted."
+msgstr "达到本方向流量额度后使用的速度。"
+
+msgid "Enter a positive speed in kbit/s."
+msgstr "请填写大于 0 的速度，单位为 kbit/s。"
+
+msgid "Allow devices to skip login with usage limits"
+msgstr "允许设备免登录并保留用量限制"
+
+msgid "Unlike fully trusted devices, these devices still have session, speed and traffic limits."
+msgstr "与完全免认证设备不同，这些设备仍受会话时长、速度和流量额度限制。"
+
+msgid "Devices that skip login but keep usage limits"
+msgstr "免登录但限制用量的设备"
+
+msgid "Add a MAC address and optional limits. Empty or zero limits inherit the global settings."
+msgstr "添加设备 MAC 地址，可按需填写限制。限制值留空或为 0 时继承全局设置。"
+
+msgid "Rules for devices that have not logged in. Empty uses the native default policy."
+msgstr "适用于尚未登录的设备。没有自定义规则时使用原生默认策略。"
+
+msgid "Custom rules replace the default allow-all policy. Add an Allow / All protocols rule for other traffic if it should remain accessible."
+msgstr "自定义规则会替换默认的全部放行策略。若需保留其他流量，请补充“允许／全部协议”规则。"
+
+msgid "Native DNS, DHCP, SSH and HTTPS management rules remain included."
+msgstr "原生 DNS、DHCP、SSH 和 HTTPS 管理规则仍然保留。"
+
+msgid "Allow websites before login"
+msgstr "允许未登录设备访问指定网站"
+
+msgid "Block websites after login"
+msgstr "禁止已登录设备访问指定网站"
+
+msgid "These ports apply to every domain in this group. Empty means all ports."
+msgstr "端口范围共同作用于本组所有域名。留空表示全部端口。"
+
+msgid "Apply or discard pending gateway changes before editing the file."
+msgstr "请先应用或撤销尚未应用的网关修改，再编辑配置文件。"
+
+msgid "Unable to read configuration."
+msgstr "无法读取配置文件。"
+
+msgid "openNDS configuration file"
+msgstr "openNDS 配置文件"
+
+msgid "No changes."
+msgstr "没有修改。"
+
+msgid "Unable to save configuration."
+msgstr "无法保存配置文件。"
+
+msgid "Configuration saved and service restarted. Check Overview for daemon status."
+msgstr "配置已保存并重启服务，请在总览中检查运行状态。"
+
+msgid "Configuration saved. Apply it to restart the service."
+msgstr "配置已保存，点击“保存并应用”可重启服务。"
+
+msgid "Save"
+msgstr "保存"
+
+msgid "Save and apply"
+msgstr "保存并应用"
+
+msgid "Expert Configuration"
+msgstr "专家配置"
+
+msgid "Edit /etc/config/opennds directly. Save or discard pending visual settings first. Syntax and the named setup section are checked before replacement; daemon behavior still needs verification."
+msgstr "直接编辑 /etc/config/opennds。请先保存或放弃可视化表单中的草稿，并应用或撤销待应用修改。替换前会检查 UCI 语法和命名 setup 段；保存后仍需检查服务运行情况。"
+
+msgid "Review changes"
+msgstr "查看修改"
+
+msgid "Use custom portal resources"
+msgstr "使用自定义门户资源"
+
+msgid "Add at least one domain to enable this feature."
+msgstr "启用此功能前请至少添加一个域名。"
+
+msgid "Set a positive upload or download speed."
+msgstr "请至少设置一个大于 0 的上传或下载速度。"
+
+msgid "Use a rate check window from 1 to 10 when speed limits are enabled."
+msgstr "启用限速时，检测窗口应为 1～10。"

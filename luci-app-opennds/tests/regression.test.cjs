@@ -220,7 +220,7 @@ function configuration(config, values = {}, parseError, hints = { hosts: {} }, d
 		}
 		parse() {
 			if (parseError) return Promise.reject(new Error(parseError));
-			const editable = options.filter(option => Object.hasOwn(addedOptions, option.name) && (!option.deps.length || option.deps.some(dependency =>
+			const editable = options.filter(option => (Object.hasOwn(addedOptions, option.name) || Object.hasOwn(values, option.name)) && (!option.deps.length || option.deps.some(dependency =>
 				Object.entries(dependency).every(([key, value]) => value instanceof RegExp ? value.test(inputs[key] || '') : value === inputs[key]))));
 			for (const option of editable) {
 				const checked = option.validate?.(config['.name'], inputs[option.name]);
@@ -271,7 +271,7 @@ function statusHelper(output, status = 'Version: test-version\n', options = {}) 
 }
 
 test('JavaScript, backend logic and JSON parse; shell scripts pass syntax checks', () => {
-	for (const file of ['config.js', 'overview.js', 'studio.js']) new Function(read(views + file));
+	for (const file of ['config.js', 'overview.js', 'studio.js', 'expert.js']) new Function(read(views + file));
 	new Function(read('htdocs/luci-static/resources/opennds.js'));
 	for (const file of ['root/usr/share/rpcd/acl.d/luci-app-opennds.json', 'root/usr/share/luci/menu.d/luci-app-opennds.json', 'root/usr/share/ucitrack/luci-app-opennds.json']) JSON.parse(read(file));
 	backend();
@@ -351,10 +351,58 @@ test('configuration groups 51 native settings into the planned six tabs without 
 	const app = configuration(config);
 	assert.equal(JSON.stringify(config), before);
 	assert.deepEqual(app.tabs, ['general', 'auth', 'traffic', 'access', 'portal', 'advanced']);
-	assert.equal(app.options.length, 51);
-	assert.equal(new Set(app.options.map(option => option.name)).size, 51);
+	const native = app.options.filter(option => !option.name.startsWith('_luci_'));
+	assert.equal(native.length, 51);
+	assert.equal(new Set(native.map(option => option.name)).size, 51);
 	for (const [name, tab] of Object.entries(addedOptions)) assert.equal(app.options.find(option => option.name === name).tab, tab, name);
 	assert.equal(app.options.find(option => option.name === 'themespec_path').tab, 'portal');
+});
+
+test('feature choices disable native policies and are never persisted as UCI options', async () => {
+	const config = { uploadrate: '1024', downloadrate: '2048', downloadquota: '512000', fup_download_throttle_rate: '128',
+		walledgarden_fqdn_list: ['example.com'], walledgarden_port_list: ['443'], future_setting: 'keep' };
+	await configuration(config, { _luci_rates: '0', _luci_download_quota: 'stop', _luci_walledgarden: '0' }).parse();
+	assert.equal(config.uploadrate, '0'); assert.equal(config.downloadrate, '0');
+	assert.equal(config.downloadquota, '512000'); assert.equal(config.fup_download_throttle_rate, '0');
+	assert.equal(config.walledgarden_fqdn_list, undefined); assert.equal(config.walledgarden_port_list, undefined);
+	assert.equal(config.future_setting, 'keep');
+	assert.equal(Object.keys(config).some(key => key.startsWith('_luci_')), false);
+	await configuration(config, { _luci_download_quota: '0' }).parse();
+	assert.equal(config.downloadquota, '0');
+});
+
+test('throttle selection requires a positive allowance and speed before FAS normalization', async () => {
+	for (const [quota, speed] of [['0', '128'], ['100', '0'], ['100', '']]) {
+		const config = { '.name': 'setup', login_option_enabled: '0', fasport: '8443', faskey: 'keep' };
+		const snapshot = JSON.stringify(config);
+		await assert.rejects(configuration(config, { login_option_enabled: '3', _luci_download_quota: 'throttle', downloadquota: quota, fup_download_throttle_rate: speed }).parse());
+		assert.equal(JSON.stringify(config), snapshot);
+	}
+});
+
+test('unrepresented existing native entries survive edits without allowing new invalid entries', async () => {
+	const config = { authenticated_users: ['native_extension value', 'allow all'] };
+	await configuration(config, { authenticated_users: 'native_extension value\nallow tcp port 443\nallow all' }).parse();
+	assert.deepEqual(config.authenticated_users, ['native_extension value', 'allow tcp port 443', 'allow all']);
+	await assert.rejects(configuration(config, { authenticated_users: 'native_extension value\nnew_invalid value' }).parse());
+});
+
+test('website and speed feature choices reject empty policies and preserve dormant expert settings', async () => {
+	await assert.rejects(configuration({}, { _luci_walledgarden: '1' }).parse());
+	await assert.rejects(configuration({}, { _luci_rates: '1' }).parse());
+	const config = { uploadrate: '1024', ratecheckwindow: '0', login_option_enabled: '3', fas_custom_parameters_list: ['note=keep'] };
+	await configuration(config).parse();
+	assert.equal(config.uploadrate, '1024'); assert.equal(config.ratecheckwindow, '0');
+	await configuration(config, { _luci_resources: '0' }).parse();
+	assert.equal(config.fas_custom_parameters_list, undefined);
+});
+
+test('expert configuration has dedicated scoped read/write ACLs', () => {
+	const acl = JSON.parse(read('root/usr/share/rpcd/acl.d/luci-app-opennds.json'))['luci-app-opennds'];
+	assert.ok(acl.read.ubus['luci.opennds'].includes('get_config'));
+	assert.ok(!acl.read.ubus['luci.opennds'].includes('save_config'));
+	assert.ok(acl.write.ubus['luci.opennds'].includes('save_config'));
+	assert.equal(acl.write.file, undefined, 'Expert editor must not grant arbitrary file writes');
 });
 
 test('new numeric fields reject invalid boundaries and preserve inherited defaults and explicit zero', async () => {
@@ -435,7 +483,7 @@ test('new dependent fields are retained and polling is available only for HTTPS 
 	const app = configuration(config);
 	assert.deepEqual(app.options.find(option => option.name === 'nat_traversal_poll_interval').deps,
 		[{ login_option_enabled: '0', fas_secure_enabled: '3' }, { login_option_enabled: '0', fas_secure_enabled: '4' }]);
-	await configuration(config, { fas_secure_enabled: '1', nat_traversal_poll_interval: '', uploadquota: '0', fup_upload_throttle_rate: '' }).parse();
+	await configuration(config, { fas_secure_enabled: '1', nat_traversal_poll_interval: '', _luci_upload_quota: '0', fup_upload_throttle_rate: '' }).parse();
 	assert.equal(config.nat_traversal_poll_interval, '59'); assert.equal(config.fup_upload_throttle_rate, '64');
 	for (const name of Object.keys(addedOptions)) {
 		const field = app.options.find(option => option.name === name);

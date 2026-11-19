@@ -32,6 +32,12 @@
 			"acl": [ "luci-app-opennds" ]
 		}
 	},
+	"admin/services/opennds/expert": {
+		"title": "Expert Configuration",
+		"order": 40,
+		"action": { "type": "view", "path": "opennds/expert" },
+		"depends": { "acl": [ "luci-app-opennds" ] }
+	},
 	"admin/services/opennds/studio": {
 		"title": "Portal Studio",
 		"order": 30,

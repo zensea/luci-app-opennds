@@ -61,6 +61,93 @@ function customValid(value, kind) {
 	return true;
 }
 
+// Keep native TextValue as the form's single source of truth and validator.
+// Only the selected row is rewritten; advanced syntax and ordering survive.
+function visualList(option, kind) {
+	option.description = (option.description || '').replace('<br />' + _('One entry per line. Order is preserved; an empty field removes the custom list.'), '');
+	option.renderWidget = function(section_id, option_index, cfgvalue) {
+		var native = form.TextValue.prototype.renderWidget.call(this, section_id, option_index, cfgvalue);
+		var input = native.querySelector('textarea') || native;
+		var rows = [], list = E('div', { 'class': 'opennds-rule-list' });
+		var readonly = this.readonly != null ? this.readonly : this.map.readonly;
+		var error = E('p', { 'role': 'alert', 'style': 'color:var(--error-color,#b91c1c)' });
+		var sync = function() {
+			input.value = rows.map(function(row) { return row.value; }).join('\n');
+			input.dispatchEvent(new Event('input', { bubbles: true }));
+			input.dispatchEvent(new Event('change', { bubbles: true }));
+		};
+		function field(label, control) {
+			control.setAttribute('aria-label', label);
+			control.disabled = !!readonly;
+			return E('label', { 'style': 'display:flex;flex-direction:column;gap:4px;min-width:0' }, [label, control]);
+		}
+		function select(values, value) {
+			var node = E('select', { 'class': 'cbi-input-select', 'style': 'width:100%' }, values.map(function(item) {
+				return E('option', { 'value': item[0] }, [item[1]]);
+			}));
+			node.value = value;
+			return node;
+		}
+		function text(value, placeholder) {
+			var node = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'placeholder': placeholder || '', 'style': 'width:100%;box-sizing:border-box' });
+			node.value = value || '';
+			return node;
+		}
+		function add(value) {
+			var row = { value: value }, controls = [];
+			var match = kind === 'rule' ? (/^(allow|block) (all|tcp|udp)(?: port ([0-9]+(?:-[0-9]+)?))?(?: to ([A-Za-z0-9._/-]+))?$/).exec(value) : null;
+			var pairs = {};
+			if (kind === 'device') value.split(';').forEach(function(part) { var pair = part.split('='); pairs[pair[0]] = pair[1]; });
+			var supported = kind === 'rule' ? !!match && ruleValid(value) : preemptiveValid(value);
+			var node = E('div', { 'style': 'padding:12px 0;border-bottom:1px solid #ddd' });
+			if (supported || !value) {
+				if (kind === 'rule') {
+					var action = select([['allow', _('Allow')], ['block', _('Deny')]], match ? match[1] : 'allow');
+					var protocol = select([['tcp', 'TCP'], ['udp', 'UDP'], ['both', _('TCP and UDP')], ['all', _('All protocols')]], match ? match[2] : 'tcp');
+					var port = text(match && match[3], '443 / 8000-8010');
+					var address = text(match && match[4], _('Any address'));
+					controls = [field(_('Action'), action), field(_('Protocol'), protocol), field(_('Port or range'), port), field(_('Destination IP or subnet'), address)];
+					var update = function() {
+						port.disabled = !!readonly || protocol.value === 'all';
+						row.value = (protocol.value === 'both' ? ['tcp', 'udp'] : [protocol.value]).map(function(name) {
+							return action.value + ' ' + name + (name === 'all' ? '' : ' port ' + port.value.trim()) + (address.value.trim() ? ' to ' + address.value.trim() : '');
+						}).join('\n');
+						error.innerText = row.value.split('\n').every(ruleValid) ? '' : _('Enter a port from 1 to 65535, or an ascending range, and a valid destination.');
+						sync();
+					};
+					port.disabled = !!readonly || protocol.value === 'all';
+					[action, protocol, port, address].forEach(function(control) { control.addEventListener('change', update); control.addEventListener('input', update); });
+				} else {
+					var names = ['mac', 'sessiontimeout', 'uploadrate', 'downloadrate', 'uploadquota', 'downloadquota', 'custom'];
+					var labels = [_('MAC address'), _('Session duration (minutes)'), _('Upload speed (kbit/s)'), _('Download speed (kbit/s)'), _('Upload quota (kB)'), _('Download quota (kB)'), _('Device note')];
+					var inputs = names.map(function(name, i) { var control = text(pairs[name], name === 'mac' ? 'AA:BB:CC:DD:EE:FF' : _('Inherit default')); controls.push(field(labels[i], control)); return control; });
+					var update = function() {
+						row.value = names.map(function(name, i) { return inputs[i].value.trim() ? name + '=' + inputs[i].value.trim() : ''; }).filter(Boolean).join(';');
+						error.innerText = preemptiveValid(row.value) ? '' : _('Enter a valid MAC address and non-negative integer limits.');
+						sync();
+					};
+					inputs.forEach(function(control) { control.addEventListener('input', update); });
+				}
+				node.appendChild(E('div', { 'style': 'display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:10px' }, controls));
+			} else {
+				node.appendChild(E('p', {}, [_('Advanced entry: preserved unchanged. Edit it in Expert Configuration.')]));
+				node.appendChild(E('code', { 'style': 'white-space:pre-wrap;overflow-wrap:anywhere' }, [value]));
+			}
+			node.appendChild(E('button', { 'type': 'button', 'class': 'cbi-button cbi-button-remove', 'disabled': readonly ? '' : null,
+				'style': 'margin-top:8px', 'click': function() { rows.splice(rows.indexOf(row), 1); node.remove(); error.innerText = ''; sync(); }
+			}, [_('Remove')]));
+			rows.push(row); list.appendChild(node);
+		}
+		(cfgvalue || '').split('\n').filter(function(line) { return line.trim(); }).forEach(add);
+		// Raw values remain inspectable, but edits go through the visual controls.
+		input.readOnly = true;
+		return E('div', {}, [list, error, E('button', { 'type': 'button', 'class': 'cbi-button cbi-button-add', 'disabled': readonly ? '' : null,
+			'click': function() { add(''); sync(); }
+		}, [kind === 'rule' ? _('Add rule') : _('Add device')]), E('details', { 'style': 'margin-top:10px' }, [E('summary', {}, [_('Show native entries')]), native])]);
+	};
+	return option;
+}
+
 return view.extend({
 	load: function() {
 		var callHostHints = rpc.declare({
@@ -131,9 +218,15 @@ return view.extend({
 				return Array.isArray(stored) ? stored.join('\n') : stored || '';
 			};
 			option.validate = function(section_id, value) {
+				if (value === option.cfgvalue(section_id)) return true;
 				var lines = (value || '').split('\n');
-				for (var i = 0; i < lines.length; i++)
-					if (lines[i].trim() && !validate(lines[i].trim())) return _('Invalid entry at line') + ' ' + (i + 1);
+				var existing = (option.cfgvalue(section_id) || '').split('\n').map(function(line) { return line.trim(); });
+				for (var i = 0; i < lines.length; i++) {
+					if (!lines[i].trim() || validate(lines[i].trim())) continue;
+					var index = existing.indexOf(lines[i].trim());
+					if (index < 0) return _('Invalid entry at line') + ' ' + (i + 1);
+					existing.splice(index, 1);
+				}
 				return true;
 			};
 			option.write = function(section_id, value) {
@@ -151,6 +244,19 @@ return view.extend({
 			option.rmempty = true;
 			return option;
 		}
+		var features = [];
+		function feature(tab, name, title, choices, initial, disable) {
+			var option = s.taboption(tab, form.ListValue, name, title);
+			choices.forEach(function(choice) { option.value(choice[0], choice[1]); });
+			option._featureValue = initial;
+			option.cfgvalue = function() { return option._featureValue; };
+			option.write = option.remove = function() {};
+			option.rmempty = false;
+			features.push({ option: option, initial: initial, disable: disable });
+			return option;
+		}
+		function hasList(name) { var value = uci.get('opennds', 'setup', name); return Array.isArray(value) ? value.length > 0 : !!value; }
+		var switches = [['0', _('Disabled')], ['1', _('Enabled')]];
 
 		/* ---------------------------------------------------------
 		 * Tab 1: General Settings
@@ -162,11 +268,6 @@ return view.extend({
 
 		o = s.taboption('general', form.Flag, 'fwhook_enabled', _('Firewall reload hook (fwhook_enabled)'),
 			_('Re-inject openNDS rules when OpenWrt firewall (FW4/nftables) restarts. Required to prevent rule loss.'));
-		o.default = '1';
-		o.rmempty = false;
-
-		o = s.taboption('general', form.Flag, 'allow_preemptive_authentication', _('Allow preemptive authentication (allow_preemptive_authentication)'),
-			_('Allow ndsctl to authorize connected clients that have not yet entered the preauth state.'));
 		o.default = '1';
 		o.rmempty = false;
 
@@ -308,18 +409,54 @@ return view.extend({
 			['downloadquota', _('Download quota (downloadquota - kB)'), _('Client download quota limit before requiring re-authentication, 0 for unlimited.'), '0'],
 			['uploadquota', _('Upload quota (uploadquota - kB)'), _('Client upload quota limit before requiring re-authentication, 0 for unlimited.'), '0']
 		];
+		var speedInputs = {};
 		traffic.forEach(function(field) {
+			if (field[0] === 'downloadrate') {
+				var speedToggle = feature('traffic', '_luci_rates', _('Limit default connection speed'), switches,
+				uci.get('opennds', 'setup', 'ratecheckwindow') !== '0' && (Number(uci.get('opennds', 'setup', 'uploadrate')) > 0 || Number(uci.get('opennds', 'setup', 'downloadrate')) > 0) ? '1' : '0', function() {
+					uci.set('opennds', 'setup', 'uploadrate', '0'); uci.set('opennds', 'setup', 'downloadrate', '0');
+				});
+				speedToggle.validate = function(section_id, value) {
+					return value !== '1' || Number(speedInputs.uploadrate.formvalue(section_id)) > 0 || Number(speedInputs.downloadrate.formvalue(section_id)) > 0
+						? true : _('Set a positive upload or download speed.');
+				};
+			}
+			var direction, choice;
+			if (field[0] === 'uploadquota' || field[0] === 'downloadquota') {
+				direction = field[0] === 'uploadquota' ? 'upload' : 'download';
+				var quota = uci.get('opennds', 'setup', field[0]);
+				var throttle = uci.get('opennds', 'setup', 'fup_' + direction + '_throttle_rate');
+				choice = feature('traffic', '_luci_' + direction + '_quota', direction === 'upload' ? _('Upload allowance') : _('Download allowance'),
+					[['0', _('Unlimited')], ['stop', _('Stop access when exceeded')], ['throttle', _('Reduce speed when exceeded')]],
+					Number(quota) > 0 ? Number(throttle) > 0 ? 'throttle' : 'stop' : '0', function() { uci.set('opennds', 'setup', field[0], '0'); });
+			}
 			var option = s.taboption('traffic', form.Value, field[0], field[1], field[2]);
 			option.default = field[3];
 			option.datatype = field[4] || 'uinteger';
-		});
-		['upload', 'download'].forEach(function(direction) {
-			var option = numberOption('traffic', 'fup_' + direction + '_throttle_rate',
-				direction === 'upload' ? _('Upload speed after quota (kbit/s)') : _('Download speed after quota (kbit/s)'),
-				_('After the matching quota is reached, use this speed. Empty or 0 uses native deauthentication instead of throttling.'), '0', 0, Number.MAX_SAFE_INTEGER);
-			var dependency = {};
-			dependency[direction + 'quota'] = /^[1-9][0-9]*$/;
-			option.depends(dependency);
+			option.retain = true;
+			if (field[0] === 'uploadrate' || field[0] === 'downloadrate' || field[0] === 'ratecheckwindow') option.depends('_luci_rates', '1');
+			if (field[0] === 'uploadrate' || field[0] === 'downloadrate') speedInputs[field[0]] = option;
+			if (field[0] === 'ratecheckwindow') {
+				option.depends('_luci_upload_quota', 'throttle');
+				option.depends('_luci_download_quota', 'throttle');
+				option.validate = function(section_id, value) {
+					return unsigned(value, 1, 10) && Number(value) > 0 ? true : _('Use a rate check window from 1 to 10 when speed limits are enabled.');
+				};
+			}
+			if (choice) {
+				option.depends('_luci_' + direction + '_quota', 'stop');
+				option.depends('_luci_' + direction + '_quota', 'throttle');
+				option.validate = function(section_id, value) { return unsigned(value, 1, Number.MAX_SAFE_INTEGER) && Number(value) > 0 ? true : _('Enter a positive allowance in kB.'); };
+				var speed = numberOption('traffic', 'fup_' + direction + '_throttle_rate',
+					direction === 'upload' ? _('Upload speed after quota (kbit/s)') : _('Download speed after quota (kbit/s)'),
+					_('Speed used after this allowance is exhausted.'), '128', 0, Number.MAX_SAFE_INTEGER);
+				speed.depends('_luci_' + direction + '_quota', 'throttle');
+				var validate = speed.validate;
+				speed.validate = function(section_id, value) {
+					if (choice.formvalue(section_id) !== 'throttle') return validate(section_id, value);
+					return validate(section_id, value) === true && Number(value) > 0 ? true : _('Enter a positive speed in kbit/s.');
+				};
+			}
 		});
 
 		/* ---------------------------------------------------------
@@ -355,24 +492,40 @@ return view.extend({
 			o.value(value, E('span', {}, [value + (detail ? '(' + detail.trim() + ')' : '')]));
 		});
 
-		listOption('access', 'preemptivemac', _('Preemptively authenticated devices'),
-			_('Use mac=AA:BB:CC:DD:EE:FF;sessiontimeout=60;uploadrate=100;downloadrate=1000;uploadquota=0;downloadquota=0;custom=device. Unlike trusted MACs, these devices retain counters, quotas and timeouts. Empty or 0 quota parameters inherit global values. Custom data accepts letters, digits and _ . : @ + / -.'), preemptiveValid)
-			.depends('allow_preemptive_authentication', '1');
-		listOption('access', 'preauthenticated_users', _('Rules before authentication'),
-			_('Example: allow tcp port 443 to 192.0.2.10 or block all to 192.0.2.0/24. Specify all, or tcp/udp with a port; native v11 misinterprets omitted protocols. Addresses may be IPv4, subnets or single-address hostnames.'), ruleValid);
-		listOption('access', 'authenticated_users', _('Rules after authentication'),
-			_('Rules follow native ordering. Defining entries replaces the native default allow-all policy; include the required allow rules.'), ruleValid);
-		listOption('access', 'users_to_router', _('Rules for access to the router'),
-			_('Example: allow tcp port 8080. Native DNS, DHCP, SSH and HTTPS management rules remain included. These entries do not override a firewall passthrough configuration.'), ruleValid);
+		o = s.taboption('access', form.Flag, 'allow_preemptive_authentication', _('Allow devices to skip login with usage limits'),
+			_('Unlike fully trusted devices, these devices still have session, speed and traffic limits.'));
+		o.default = '1';
+		o.rmempty = false;
+		visualList(listOption('access', 'preemptivemac', _('Devices that skip login but keep usage limits'),
+			_('Add a MAC address and optional limits. Empty or zero limits inherit the global settings.'), preemptiveValid), 'device').depends('allow_preemptive_authentication', '1');
+		visualList(listOption('access', 'preauthenticated_users', _('Rules before authentication'),
+			_('Rules for devices that have not logged in. Empty uses the native default policy.'), ruleValid), 'rule');
+		visualList(listOption('access', 'authenticated_users', _('Rules after authentication'),
+			_('Custom rules replace the default allow-all policy. Add an Allow / All protocols rule for other traffic if it should remain accessible.'), ruleValid), 'rule');
+		visualList(listOption('access', 'users_to_router', _('Rules for access to the router'),
+			_('Native DNS, DHCP, SSH and HTTPS management rules remain included.'), ruleValid), 'rule');
 		[
 			['walledgarden_fqdn_list', _('Walled garden FQDN list (walledgarden_fqdn_list)'), _('Domains accessible to preauthenticated clients before logging in.'), 'host(0)', 'captive.apple.com'],
 			['walledgarden_port_list', _('Walled garden port list (walledgarden_port_list)'), _('Allowed ports for walled garden domains (typically 443; empty allows all ports).'), 'port', '443'],
 			['blocklist_fqdn_list', _('Blocked FQDN list (blocklist_fqdn_list)'), _('Domains blocked even for authenticated clients.'), 'host(0)', 'unwanted-domain.com'],
 			['blocklist_port_list', _('Blocked port list (blocklist_port_list)'), _('Ports blocked for blocklist domains (empty blocks all ports).'), 'port', '80']
 		].forEach(function(field) {
+			var group = field[0].indexOf('walledgarden') === 0 ? 'walledgarden' : 'blocklist';
+			var choice;
+			if (field[3] === 'host(0)') choice = feature('access', '_luci_' + group,
+				group === 'walledgarden' ? _('Allow websites before login') : _('Block websites after login'), switches, hasList(field[0]) ? '1' : '0', function() {
+					uci.unset('opennds', 'setup', group + '_fqdn_list'); uci.unset('opennds', 'setup', group + '_port_list');
+				});
 			var option = s.taboption('access', form.DynamicList, field[0], field[1], field[2]);
 			option.datatype = field[3];
 			option.placeholder = field[4];
+			option.retain = true;
+			option.depends('_luci_' + group, '1');
+			if (choice) choice.validate = function(section_id, value) {
+				var domains = option.formvalue(section_id);
+				return value !== '1' || (Array.isArray(domains) ? domains.length > 0 : !!domains) ? true : _('Add at least one domain to enable this feature.');
+			};
+			if (field[3] === 'port') option.description = _('These ports apply to every domain in this group. Empty means all ports.');
 		});
 
 		// Portal and resources share the same UCI section as authentication.
@@ -387,6 +540,14 @@ return view.extend({
 		o.value('/usr/lib/opennds/status_luci.sh', _('Plugin branded status page'));
 		numberOption('portal', 'max_page_size', _('Maximum portal page size (bytes)'),
 			_('Minimum 1024 bytes. Empty uses 10240. Larger pages consume more router memory; Portal Studio still checks its content against this limit.'), '10240', 1024, Number.MAX_SAFE_INTEGER);
+		var resourceLists = ['parameters', 'variables', 'images', 'files'];
+		o = feature('portal', '_luci_resources', _('Use custom portal resources'), switches,
+			resourceLists.some(function(kind) { return hasList('fas_custom_' + kind + '_list'); }) ? '1' : '0', function() {
+				resourceLists.forEach(function(kind) { uci.unset('opennds', 'setup', 'fas_custom_' + kind + '_list'); });
+				uci.unset('opennds', 'setup', 'remotes_refresh_interval');
+			});
+		o.depends('login_option_enabled', '0'); o.depends('login_option_enabled', '3');
+		o.retain = true;
 		[
 			['parameters', _('Custom FAS parameters'), _('Use name=value; encode spaces as %20 and single quotes as %27.')],
 			['variables', _('Custom ThemeSpec variables'), _('Use name=value or input=phone:Phone%20number:tel;email:Email:email. Values are native definitions, not shell commands.')],
@@ -394,13 +555,13 @@ return view.extend({
 			['files', _('Custom portal files'), _('Use advert_htm=https://example.com/advert.htm. Files are downloaded by the native theme when used.')]
 		].forEach(function(field) {
 			var option = listOption('portal', 'fas_custom_' + field[0] + '_list', field[1], field[2], function(value) { return customValid(value, field[0]); });
-			option.depends('login_option_enabled', '0');
-			option.depends('login_option_enabled', '3');
+			option.depends({ login_option_enabled: '0', _luci_resources: '1' });
+			option.depends({ login_option_enabled: '3', _luci_resources: '1' });
 		});
 		o = numberOption('portal', 'remotes_refresh_interval', _('Remote resource refresh interval (minutes)'),
 			_('Empty or 0 disables periodic refresh. This applies to downloaded resources used by native themes.'), '0', 0, 4294967295);
-		o.depends('login_option_enabled', '0');
-		o.depends('login_option_enabled', '3');
+		o.depends({ login_option_enabled: '0', _luci_resources: '1' });
+		o.depends({ login_option_enabled: '3', _luci_resources: '1' });
 
 		pathOption('advanced', 'log_mountpoint', _('Local authentication log mountpoint'),
 			_('Empty uses /tmp. Select an existing writable RAM or external-storage mountpoint; avoid internal flash. This setting does not change syslog.'), '/tmp');
@@ -417,6 +578,16 @@ return view.extend({
 		var parse = m.parse;
 		m.parse = function() {
 			return parse.apply(this, arguments).then(function() {
+				features.forEach(function(feature) {
+					var value = feature.option.formvalue('setup');
+					if (value === '0' && feature.initial !== '0') feature.disable();
+					if (value === 'stop' && feature.initial !== 'stop') {
+						var direction = feature.option.option || feature.option.name;
+						direction = direction.indexOf('upload') >= 0 ? 'upload' : 'download';
+						uci.set('opennds', 'setup', 'fup_' + direction + '_throttle_rate', '0');
+					}
+					if (value != null) { feature.initial = value; feature.option._featureValue = value; }
+				});
 				var mode = uci.get('opennds', 'setup', 'login_option_enabled') || '1';
 				var port = fasPort.formvalue('setup');
 				if (port == null) port = fasPort.cfgvalue('setup');
@@ -434,6 +605,20 @@ return view.extend({
 			});
 		};
 
-		return m.render();
+		if (typeof window === 'undefined') return m.render();
+		var dirty = false, saving = false, save = m.save, reset = m.reset;
+		m.save = function() {
+			saving = true;
+			return save.apply(this, arguments).then(function(result) { dirty = false; return result; }).finally(function() { saving = false; });
+		};
+		m.reset = function() { return reset.apply(this, arguments).then(function(result) { dirty = false; return result; }); };
+		if (this._unload) window.removeEventListener('beforeunload', this._unload);
+		this._unload = function(event) { if (dirty || saving) { event.preventDefault(); event.returnValue = ''; } };
+		window.addEventListener('beforeunload', this._unload);
+		return m.render().then(function(root) {
+			root.addEventListener('input', function() { dirty = true; });
+			root.addEventListener('change', function() { dirty = true; });
+			return root;
+		});
 	}
 });

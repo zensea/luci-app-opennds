@@ -648,3 +648,180 @@ msgstr ""
 
 msgid "Empty inherits enabled. Disable to search actual wireless interfaces; extended or mesh networks may scan more slowly."
 msgstr ""
+
+msgid "Allow"
+msgstr ""
+
+msgid "Deny"
+msgstr ""
+
+msgid "TCP and UDP"
+msgstr ""
+
+msgid "All protocols"
+msgstr ""
+
+msgid "Any address"
+msgstr ""
+
+msgid "Action"
+msgstr ""
+
+msgid "Protocol"
+msgstr ""
+
+msgid "Port or range"
+msgstr ""
+
+msgid "Destination IP or subnet"
+msgstr ""
+
+msgid "Enter a port from 1 to 65535, or an ascending range, and a valid destination."
+msgstr ""
+
+msgid "MAC address"
+msgstr ""
+
+msgid "Session duration (minutes)"
+msgstr ""
+
+msgid "Upload speed (kbit/s)"
+msgstr ""
+
+msgid "Download speed (kbit/s)"
+msgstr ""
+
+msgid "Upload quota (kB)"
+msgstr ""
+
+msgid "Download quota (kB)"
+msgstr ""
+
+msgid "Device note"
+msgstr ""
+
+msgid "Inherit default"
+msgstr ""
+
+msgid "Enter a valid MAC address and non-negative integer limits."
+msgstr ""
+
+msgid "Advanced entry: preserved unchanged. Edit it in Expert Configuration."
+msgstr ""
+
+msgid "Remove"
+msgstr ""
+
+msgid "Add rule"
+msgstr ""
+
+msgid "Add device"
+msgstr ""
+
+msgid "Show native entries"
+msgstr ""
+
+msgid "Limit default connection speed"
+msgstr ""
+
+msgid "Upload allowance"
+msgstr ""
+
+msgid "Download allowance"
+msgstr ""
+
+msgid "Unlimited"
+msgstr ""
+
+msgid "Stop access when exceeded"
+msgstr ""
+
+msgid "Reduce speed when exceeded"
+msgstr ""
+
+msgid "Enter a positive allowance in kB."
+msgstr ""
+
+msgid "Speed used after this allowance is exhausted."
+msgstr ""
+
+msgid "Enter a positive speed in kbit/s."
+msgstr ""
+
+msgid "Allow devices to skip login with usage limits"
+msgstr ""
+
+msgid "Unlike fully trusted devices, these devices still have session, speed and traffic limits."
+msgstr ""
+
+msgid "Devices that skip login but keep usage limits"
+msgstr ""
+
+msgid "Add a MAC address and optional limits. Empty or zero limits inherit the global settings."
+msgstr ""
+
+msgid "Rules for devices that have not logged in. Empty uses the native default policy."
+msgstr ""
+
+msgid "Custom rules replace the default allow-all policy. Add an Allow / All protocols rule for other traffic if it should remain accessible."
+msgstr ""
+
+msgid "Native DNS, DHCP, SSH and HTTPS management rules remain included."
+msgstr ""
+
+msgid "Allow websites before login"
+msgstr ""
+
+msgid "Block websites after login"
+msgstr ""
+
+msgid "These ports apply to every domain in this group. Empty means all ports."
+msgstr ""
+
+msgid "Apply or discard pending gateway changes before editing the file."
+msgstr ""
+
+msgid "Unable to read configuration."
+msgstr ""
+
+msgid "openNDS configuration file"
+msgstr ""
+
+msgid "No changes."
+msgstr ""
+
+msgid "Unable to save configuration."
+msgstr ""
+
+msgid "Configuration saved and service restarted. Check Overview for daemon status."
+msgstr ""
+
+msgid "Configuration saved. Apply it to restart the service."
+msgstr ""
+
+msgid "Save"
+msgstr ""
+
+msgid "Save and apply"
+msgstr ""
+
+msgid "Expert Configuration"
+msgstr ""
+
+msgid "Edit /etc/config/opennds directly. Save or discard pending visual settings first. Syntax and the named setup section are checked before replacement; daemon behavior still needs verification."
+msgstr ""
+
+msgid "Review changes"
+msgstr ""
+
+msgid "Use custom portal resources"
+msgstr ""
+
+msgid "Add at least one domain to enable this feature."
+msgstr ""
+
+msgid "Set a positive upload or download speed."
+msgstr ""
+
+msgid "Use a rate check window from 1 to 10 when speed limits are enabled."
+msgstr ""

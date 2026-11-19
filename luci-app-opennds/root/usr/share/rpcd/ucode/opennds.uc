@@ -7,6 +7,8 @@ import * as uci from 'uci';
 const portal_file = '/etc/opennds/portal_theme.json';
 const portal_script = '/usr/lib/opennds/theme_luci.sh';
 const status_script = '/usr/lib/opennds/status_luci.sh';
+const config_file = '/etc/config/opennds';
+const config_stage = '/etc/config/opennds_luci_pending';
 const bus = connect(null, 18);
 let restarting = false;
 
@@ -43,16 +45,36 @@ function restart(callback) {
 	});
 }
 
-function settings() {
-	let cursor = uci.cursor();
-	if (!cursor.load('opennds')) die('Unable to load opennds configuration');
+function settings(cursor, package_name) {
+	cursor = cursor || uci.cursor();
+	package_name = package_name || 'opennds';
+	if (!cursor.load(package_name)) die('Unable to load opennds configuration');
 	let sections = [];
-	cursor.foreach('opennds', 'opennds', function(s) {
+	cursor.foreach(package_name, 'opennds', function(s) {
 		push(sections, s);
 	});
 	if (length(sections) != 1 || sections[0]['.name'] != 'setup' || sections[0]['.anonymous'])
 		die("Expected exactly one named openNDS section: config opennds 'setup'");
 	return { cursor: cursor, section: sections[0] };
+}
+
+function config_text() {
+	fs_error();
+	let fp = open(config_file, 'r');
+	if (!fp) die('Unable to read opennds configuration');
+	let content = fp.read(65537);
+	let reason = fs_error();
+	let closed = fp.close();
+	if (reason || type(content) != 'string' || !closed || length(content) > 65536)
+		die('Unable to read configuration or file exceeds 64 KiB');
+	return content;
+}
+
+function config_unchanged(original) {
+	if (config_text() != original) die('Configuration changed; reload before saving');
+	let changes = settings().cursor.changes('opennds');
+	if (changes == null || length(changes.opennds || []))
+		die('Apply or discard pending gateway changes before editing the file');
 }
 
 function inspect_config(callback) {
@@ -85,6 +107,52 @@ function html_escape(value) {
 }
 
 const methods = {
+	get_config: {
+		call: function() {
+			try { return { content: config_text() }; }
+			catch (e) { return { error: '' + e }; }
+		}
+	},
+
+	save_config: {
+		args: { content: '', original: '', apply: false },
+		call: function(request) {
+			let args = request.args || {};
+			if (type(args.content) != 'string' || type(args.original) != 'string' ||
+				length(args.content) > 65536 || length(args.original) > 65536 || index(args.content, '\x00') >= 0)
+				return { code: 1, message: 'Invalid configuration payload (maximum 64 KiB)' };
+			if (restarting) return { code: 1, message: 'Configuration operation in progress' };
+			return inspect_config(function(diagnostic) {
+				if (diagnostic.error) { request.reply({ code: 1, message: diagnostic.error }); return; }
+				if (restarting) { request.reply({ code: 1, message: 'Configuration operation in progress' }); return; }
+				let staged = false;
+				try {
+					config_unchanged(args.original);
+					// Exclusive creation refuses stale files and symlinks; never truncate them.
+					let fp = open(config_stage, 'wx', 0x180); // 0600
+					if (!fp) die('Unable to create temporary configuration');
+					staged = true;
+					let written = fp.write(args.content);
+					let closed = fp.close();
+					if (written != length(args.content) || !closed) die('Unable to write configuration');
+					// A separate strict UCI cursor parses the file without loading session deltas.
+					settings(uci.cursor('/etc/config', '/dev/null', '', { strict: true, print_errors: false }), 'opennds_luci_pending');
+					config_unchanged(args.original);
+					if (!rename(config_stage, config_file)) die('Unable to replace configuration');
+					staged = false;
+				} catch (e) {
+					if (staged) unlink(config_stage);
+					request.reply({ code: 1, message: '' + e }); return;
+				}
+				if (!args.apply) { request.reply({ code: 0, saved: true, applied: false }); return; }
+				return restart(function(result) {
+					request.reply({ code: result.code, saved: true, applied: result.code == 0,
+						message: result.code == 0 ? '' : 'Configuration saved, but service restart failed', output: result.output });
+				});
+			});
+		}
+	},
+
 	status: {
 		call: function(request) {
 			return execute('timeout -s KILL 2 pidof opennds', function(process) {
